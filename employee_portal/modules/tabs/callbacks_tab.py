@@ -116,7 +116,35 @@ def render_callbacks_tab(user: dict):
         flex-direction: column;
         align-items: flex-end;
         gap: 8px;
-        min-width: 100px;
+        min-width: 120px;
+    }
+    .cb-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+    }
+    .cb-actions select {
+        background: #1A1D27;
+        color: #E8EAF0;
+        border: 1px solid #2E3350;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+    }
+    .cb-actions button {
+        border: none;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        cursor: pointer;
+    }
+    .btn-update {
+        background: #4F6BFF;
+        color: white;
+    }
+    .btn-delete {
+        background: #FF6B6B;
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -243,7 +271,6 @@ def render_callbacks_tab(user: dict):
                     if not cust_name or not phone:
                         st.error("Customer Name and Phone are required.")
                     else:
-                        # Combine address and notes
                         if address and notes:
                             full_notes = f"📍 Address: {address}\n\n📝 Notes: {notes}"
                         elif address:
@@ -295,11 +322,10 @@ def render_callbacks_tab(user: dict):
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
     for cb in filtered:
-        # Extract address and notes from combined notes
+        # Extract address and notes
         notes_text = cb.get("notes", "")
         address_text = ""
         
-        # Try to extract address if stored with format "📍 Address: ..."
         if "📍 Address:" in notes_text:
             parts = notes_text.split("📍 Address:")
             if len(parts) > 1:
@@ -321,56 +347,52 @@ def render_callbacks_tab(user: dict):
             txt_color, bg_color = LEGACY_STATUS_COLORS.get(cb["status"], ("#8B90A8", "#1A1D27"))
             emoji = ""
 
-        # Build the record
-        record_html = f"""
-        <div class="cb-card">
-            <div class="cb-row">
-                <div class="cb-left">
-                    <div class="cb-name">👤 {cb.get('customer_name', '—')}</div>
-                    <div class="cb-phone">📱 {cb.get('phone', '—')}</div>
-        """
-        
-        if address_text:
-            record_html += f'<div class="cb-address">📍 {address_text}</div>'
-        
-        record_html += f"""
-                    <div class="cb-dt">📅 {cb.get('callback_date', '—')} &nbsp; ⏰ {cb.get('callback_time', '—')}</div>
-        """
-        
-        if notes_text and notes_text.strip():
-            record_html += f'<div class="cb-notes">📝 {notes_text}</div>'
-        
-        record_html += f"""
-                </div>
-                <div class="cb-right">
-                    <span class="status-pill" style="color:{txt_color};background:{bg_color};border:1px solid {txt_color}55;">
-                        {emoji} {cb['status']}
-                    </span>
-        """
-        
-        # Actions for employees only
-        if is_employee:
-            record_html += f"""
-                    <div style="display:flex;gap:6px;margin-top:6px;">
-                        <select style="background:#1A1D27;color:#E8EAF0;border:1px solid #2E3350;border-radius:6px;padding:4px 8px;font-size:0.75rem;" id="stat_select_{cb['id']}">
-                            {''.join(f'<option value="{s}" {"selected" if s == cb["status"] else ""}>{s}</option>' for s in ["Cold","Warm","Hot","Pending","Completed","Cancelled"])}
-                        </select>
-                        <button style="background:#4F6BFF;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">💾</button>
-                        <button style="background:#FF6B6B;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🗑️</button>
-                    </div>
-            """
-        else:
-            record_html += f"""
-                    <div style="color:#8B90A8;font-size:0.75rem;margin-top:4px;">🔒 Read-only</div>
-            """
-        
-        record_html += """
-                </div>
-            </div>
-        </div>
-        """
-        
-        st.markdown(record_html, unsafe_allow_html=True)
+        # Display the callback
+        with st.container():
+            col_left, col_right = st.columns([3, 1])
+            
+            with col_left:
+                st.markdown(f"**👤 {cb.get('customer_name', '—')}**")
+                st.markdown(f"📱 {cb.get('phone', '—')}")
+                if address_text:
+                    st.markdown(f"📍 {address_text}")
+                st.markdown(f"📅 {cb.get('callback_date', '—')} &nbsp; ⏰ {cb.get('callback_time', '—')}")
+                if notes_text and notes_text.strip():
+                    st.markdown(f"📝 {notes_text}")
+            
+            with col_right:
+                # Status badge
+                st.markdown(
+                    f'<span class="status-pill" style="color:{txt_color};background:{bg_color};border:1px solid {txt_color}55;">{emoji} {cb["status"]}</span>',
+                    unsafe_allow_html=True
+                )
+                
+                # Actions for employees only
+                if is_employee:
+                    all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
+                    current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
+                    
+                    new_status = st.selectbox(
+                        "Status",
+                        all_statuses_list,
+                        index=current_idx,
+                        key=f"stat_{cb['id']}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    col_upd, col_del = st.columns(2)
+                    with col_upd:
+                        if st.button("💾", key=f"upd_{cb['id']}", help="Update status"):
+                            update_callback(cb["id"], status=new_status)
+                            _sync_excel()
+                            st.rerun()
+                    with col_del:
+                        if st.button("🗑️", key=f"del_{cb['id']}", help="Delete"):
+                            delete_callback(cb["id"])
+                            _sync_excel()
+                            st.rerun()
+                else:
+                    st.markdown("🔒 Read-only")
 
     if not filtered:
         st.info("No callbacks match the current filters.")
