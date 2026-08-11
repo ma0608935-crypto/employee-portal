@@ -71,7 +71,6 @@ def profile_card(user: dict):
     
     /* ===== Avatar ===== */
     .avatar-wrapper {
-        position: relative;
         display: inline-block;
         width: 170px;
         height: 170px;
@@ -95,31 +94,6 @@ def profile_card(user: dict):
         font-weight: 700;
         color: white;
         border: 3px solid #2E3350;
-    }
-    
-    /* ===== Pencil Icon (small, on the avatar) ===== */
-    .avatar-edit-icon {
-        position: absolute;
-        bottom: 4px;
-        right: 4px;
-        background: #4F6BFF;
-        border: 2px solid #1A1D27;
-        border-radius: 50%;
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        color: white;
-        cursor: pointer;
-        transition: all 0.2s;
-        box-shadow: 0 2px 8px rgba(79,107,255,0.4);
-        z-index: 10;
-    }
-    .avatar-edit-icon:hover {
-        transform: scale(1.1);
-        background: #3B55E6;
     }
     
     /* Upload area */
@@ -149,12 +123,11 @@ def profile_card(user: dict):
     with col_av:
         photo_b64 = _load_photo(user.get("photo_path"))
         
-        # Display avatar with pencil icon on top
+        # Display avatar (بدون قلم)
         if photo_b64:
             st.markdown(f'''
             <div class="avatar-wrapper">
                 <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
-                <div class="avatar-edit-icon" id="edit_icon_{user['id']}">🖊️</div>
             </div>
             ''', unsafe_allow_html=True)
         else:
@@ -162,11 +135,10 @@ def profile_card(user: dict):
             st.markdown(f'''
             <div class="avatar-wrapper">
                 <div class="avatar-initials">{initials}</div>
-                <div class="avatar-edit-icon" id="edit_icon_{user['id']}">🖊️</div>
             </div>
             ''', unsafe_allow_html=True)
         
-        # ── زر القلم (اللي بيظهر/يخفي الـ upload) ──────────────────────────
+        # ── زر تغيير الصورة ──────────────────────────────────────────────────
         if st.button("🖊️ Change Photo", key=f"edit_photo_{user['id']}", help="Change photo"):
             st.session_state[upload_key] = not st.session_state[upload_key]
             st.rerun()
