@@ -8,10 +8,19 @@ import pandas as pd
 import os
 import json
 from datetime import date, datetime, timedelta
-from modules.database import start_break, end_break, get_open_break, get_breaks, get_break_schedule, save_break_schedule
+from modules.database import start_break, end_break, get_open_break, get_breaks, get_break_schedule, save_break_schedule, get_timezone
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 BREAK_FILE = os.path.join(DATA_DIR, "breaks.xlsx")
+
+
+def _get_local_time():
+    """Get local time based on system timezone setting."""
+    hours, minutes = get_timezone()
+    total_minutes = hours * 60 + minutes
+    utc_now = datetime.utcnow()
+    local_now = utc_now + timedelta(minutes=total_minutes)
+    return local_now
 
 
 def _sync_excel():
@@ -172,18 +181,19 @@ def render_breaks_tab(user: dict):
                 st.markdown(f'<div style="color:#4F6BFF;font-size:0.82rem">🔴 In progress since {start_display}</div>',
                             unsafe_allow_html=True)
                 if st.button("⏹️ End Break", key=f"end_{i}"):
-                    end_dt = datetime.now()
+                    local_now = _get_local_time()
                     start_dt = datetime.strptime(
                         f"{today_str} {open_rec['start_time']}", "%Y-%m-%d %H:%M:%S")
-                    duration = (end_dt - start_dt).seconds / 60
-                    end_break(open_rec["id"], end_dt.strftime("%H:%M:%S"), round(duration, 2))
+                    duration = (local_now - start_dt).seconds / 60
+                    end_break(open_rec["id"], local_now.strftime("%H:%M:%S"), round(duration, 2))
                     _sync_excel()
                     st.rerun()
             else:
                 if st.button("▶️ Start Break", key=f"start_{i}"):
+                    local_now = _get_local_time()
                     start_break(
                         user.get("employee_id"), user.get("full_name"),
-                        brk["name"], datetime.now().strftime("%H:%M:%S"), today_str)
+                        brk["name"], local_now.strftime("%H:%M:%S"), today_str)
                     _sync_excel()
                     st.rerun()
 
