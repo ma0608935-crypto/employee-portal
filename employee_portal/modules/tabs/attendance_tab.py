@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import date, datetime, timedelta
-from modules.database import record_attendance, get_attendance, get_all_users
+from modules.database import record_attendance, get_attendance, get_all_users, get_system_setting, set_system_setting
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
@@ -35,22 +35,31 @@ def _is_late(check_hour, check_minute):
     return False
 
 
+def _get_tz_from_db():
+    """Get timezone from database."""
+    try:
+        tz_str = get_system_setting("timezone", f"{DEFAULT_TZ_HOURS}:{DEFAULT_TZ_MINUTES:02d}")
+        parts = tz_str.split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1]) if len(parts) > 1 else 0
+        return hours, minutes
+    except:
+        return DEFAULT_TZ_HOURS, DEFAULT_TZ_MINUTES
+
+
+def _save_tz_to_db(hours, minutes):
+    """Save timezone to database."""
+    set_system_setting("timezone", f"{hours}:{minutes:02d}")
+
+
 def _get_local_time():
     """
     Get local time based on system timezone setting (hours + minutes).
     """
-    # Check if timezone is set in session
-    if "system_tz_hours" in st.session_state and "system_tz_minutes" in st.session_state:
-        offset_hours = st.session_state.system_tz_hours
-        offset_minutes = st.session_state.system_tz_minutes
-        total_minutes = offset_hours * 60 + offset_minutes
-        utc_now = datetime.utcnow()
-        local_now = utc_now + timedelta(minutes=total_minutes)
-        return local_now
-    
-    # Fallback to default
+    hours, minutes = _get_tz_from_db()
+    total_minutes = hours * 60 + minutes
     utc_now = datetime.utcnow()
-    local_now = utc_now + timedelta(hours=DEFAULT_TZ_HOURS, minutes=DEFAULT_TZ_MINUTES)
+    local_now = utc_now + timedelta(minutes=total_minutes)
     return local_now
 
 
@@ -58,11 +67,8 @@ def render_attendance_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
     
-    # ── Initialize timezone in session if not exists ────────────────────────
-    if "system_tz_hours" not in st.session_state:
-        st.session_state.system_tz_hours = DEFAULT_TZ_HOURS
-    if "system_tz_minutes" not in st.session_state:
-        st.session_state.system_tz_minutes = DEFAULT_TZ_MINUTES
+    # Get current timezone from database
+    current_hours, current_minutes = _get_tz_from_db()
     
     # ── Timezone Settings (Admin/Leader Only) ───────────────────────────────
     if is_admin:
@@ -71,14 +77,10 @@ def render_attendance_tab(user: dict):
             <div style="background:#1A1D27;border:1px solid #2E3350;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
                 <p style="color:#8B90A8;font-size:0.85rem;">
                     <strong>⚠️ Admin Only:</strong> Set the system timezone for all users.
-                    <br>Examples: Egypt = +2:00, India = +5:30, Nepal = +5:45
+                    <br>Examples: Egypt = +2:00, Saudi = +3:00, UAE = +4:00, India = +5:30
                 </p>
             </div>
             """, unsafe_allow_html=True)
-            
-            # Get current values from session
-            current_hours = st.session_state.system_tz_hours
-            current_minutes = st.session_state.system_tz_minutes
             
             col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
@@ -99,9 +101,8 @@ def render_attendance_tab(user: dict):
                 )
             with col3:
                 if st.button("✅ Apply to All Users", key="apply_tz_btn"):
-                    # Save to session state
-                    st.session_state.system_tz_hours = new_tz_hours
-                    st.session_state.system_tz_minutes = new_tz_minutes
+                    # Save to database
+                    _save_tz_to_db(new_tz_hours, new_tz_minutes)
                     
                     total_minutes = new_tz_hours * 60 + new_tz_minutes
                     hours_display = total_minutes // 60
@@ -131,9 +132,8 @@ def render_attendance_tab(user: dict):
     else:
         # Regular employees see a small indicator
         local_now = _get_local_time()
-        tz_hours = st.session_state.system_tz_hours
-        tz_minutes = st.session_state.system_tz_minutes
-        total_minutes = tz_hours * 60 + tz_minutes
+        hours, minutes = _get_tz_from_db()
+        total_minutes = hours * 60 + minutes
         hours_display = total_minutes // 60
         mins_display = abs(total_minutes % 60)
         sign = "+" if total_minutes >= 0 else ""
