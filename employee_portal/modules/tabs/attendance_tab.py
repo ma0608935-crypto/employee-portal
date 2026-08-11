@@ -8,11 +8,12 @@ import pandas as pd
 import os
 from datetime import date, datetime, timedelta
 from modules.database import record_attendance, get_attendance, get_all_users
+import streamlit.components.v1 as components
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
 
-# ✅ وقت الحضور المتوقع (5:00 PM)
+# وقت الحضور المتوقع (5:00 PM)
 EXPECTED_HOUR = 17
 EXPECTED_MINUTE = 0
 
@@ -99,102 +100,49 @@ def render_attendance_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Detect Timezone from Browser ────────────────────────────────────────
-    # JavaScript to detect browser timezone offset
-    detect_tz_js = """
-    <script>
-        const timezoneOffset = new Date().getTimezoneOffset();
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'timezone_offset';
-        input.value = -timezoneOffset;  // Convert to minutes (negative because JS returns opposite)
-        input.id = 'tz_offset_input';
-        document.body.appendChild(input);
-        
-        // Send to Streamlit
-        const script = document.createElement('script');
-        script.innerHTML = `
-            const offset = document.getElementById('tz_offset_input').value;
-            const parent = window.parent;
-            const data = {timezone_offset: offset};
-            parent.postMessage({
-                type: 'streamlit:setComponentValue',
-                value: data
-            }, '*');
-        `;
-        document.body.appendChild(script);
-    </script>
-    """
-    
-    # Try to get timezone from browser using a different approach
+    # ── Detect Timezone using JavaScript component ──────────────────────────
     if "user_timezone_offset" not in st.session_state:
-        # Use a hidden component to detect timezone
-        tz_html = f"""
-        <div id="tz_detector">
-            <p style="color:#8B90A8;font-size:0.8rem;">🕐 Detecting your local time...</p>
-            <p style="color:#8B90A8;font-size:0.7rem;" id="tz_display"></p>
+        # Create a hidden component to detect timezone
+        tz_detector = """
+        <div id="tz_detector" style="display:none;">
+            <p id="tz_status">Detecting timezone...</p>
         </div>
         <script>
-            function detectTimezone() {{
-                const offset = -new Date().getTimezoneOffset();
+            function detectAndSendTimezone() {
                 const now = new Date();
+                const offset = -now.getTimezoneOffset();
                 const hours = String(now.getHours()).padStart(2, '0');
                 const minutes = String(now.getMinutes()).padStart(2, '0');
                 const seconds = String(now.getSeconds()).padStart(2, '0');
                 const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
                 const hour12 = now.getHours() % 12 || 12;
                 
-                document.getElementById('tz_display').innerHTML = 
-                    `🕐 Your local time: ${hour12}:${minutes}:${seconds} ${ampm}`;
+                const data = {
+                    timezone_offset: offset,
+                    local_time: hours + ':' + minutes + ':' + seconds,
+                    local_time_12: hour12 + ':' + minutes + ':' + seconds + ' ' + ampm
+                };
                 
-                // Store timezone offset in session via Streamlit
-                const data = {{timezone_offset: offset}};
-                const event = new CustomEvent('streamlit:setComponentValue', {{
-                    detail: {{value: data}}
-                }});
-                window.dispatchEvent(event);
-            }}
-            detectTimezone();
+                // Send data to Streamlit via parent
+                window.parent.postMessage({
+                    type: 'streamlit:setComponentValue',
+                    value: data
+                }, '*');
+                
+                document.getElementById('tz_status').innerHTML = 
+                    '🕐 Local time detected: ' + data.local_time_12;
+            }
+            
+            // Run detection
+            detectAndSendTimezone();
         </script>
         """
         
-        # Display the timezone detector
-        st.markdown(tz_html, unsafe_allow_html=True)
-        
-        # Add a button to detect timezone
-        if st.button("🕐 Detect My Local Time", key="detect_tz"):
-            # Get current time from browser using JavaScript
-            detect_js = """
-            <script>
-                const now = new Date();
-                const offset = -now.getTimezoneOffset();
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                const seconds = String(now.getSeconds()).padStart(2, '0');
-                
-                const data = {
-                    timezone_offset: offset,
-                    local_time: `${hours}:${minutes}:${seconds}`
-                };
-                
-                // Send to Streamlit
-                const event = new CustomEvent('streamlit:setComponentValue', {
-                    detail: {value: data}
-                });
-                window.dispatchEvent(event);
-            </script>
-            """
-            st.markdown(detect_js, unsafe_allow_html=True)
-            st.success("✅ Timezone detected!")
-            st.rerun()
-
+        # Use components to run JavaScript
+        components.html(tz_detector, height=0)
+    
     # Show current local time
-    col_tz1, col_tz2 = st.columns([3, 1])
-    with col_tz1:
-        st.caption(f"🕐 Current time: {local_now.strftime('%I:%M:%S %p')}")
-    with col_tz2:
-        if "user_timezone_offset" in st.session_state:
-            st.caption("✅ Timezone: Detected")
+    st.caption(f"🕐 Your local time: {local_now.strftime('%I:%M:%S %p')}")
 
     st.markdown("---")
 
