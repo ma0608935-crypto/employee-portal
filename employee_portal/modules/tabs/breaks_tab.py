@@ -6,40 +6,18 @@ Break management — only for current user (admin/leader see only their own)
 import streamlit as st
 import pandas as pd
 import os
+import json
 from datetime import date, datetime, timedelta
-from modules.database import start_break, end_break, get_open_break, get_breaks
+from modules.database import start_break, end_break, get_open_break, get_breaks, get_break_schedule, save_break_schedule
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 BREAK_FILE = os.path.join(DATA_DIR, "breaks.xlsx")
-
-# Default break schedule stored in session state
-DEFAULT_BREAKS = [
-    {"name": "Break 1", "start": "12:00", "end": "12:30", "emoji": "🌞"},
-    {"name": "Break 2", "start": "15:00", "end": "15:30", "emoji": "🌆"},
-    {"name": "Break 3", "start": "18:00", "end": "18:30", "emoji": "🌙"},
-]
-
-
-def _get_breaks_schedule():
-    if "break_schedule" not in st.session_state:
-        st.session_state.break_schedule = DEFAULT_BREAKS.copy()
-    return st.session_state.break_schedule
 
 
 def _sync_excel():
     os.makedirs(DATA_DIR, exist_ok=True)
     records = get_breaks()
     pd.DataFrame(records).to_excel(BREAK_FILE, index=False)
-
-
-def _convert_to_24h(hour, minute, am_pm):
-    """Convert 12-hour format to 24-hour format."""
-    hour_24 = hour
-    if am_pm == "PM" and hour != 12:
-        hour_24 = hour + 12
-    elif am_pm == "AM" and hour == 12:
-        hour_24 = 0
-    return f"{hour_24:02d}:{minute:02d}"
 
 
 def _convert_to_12h(time_str):
@@ -54,7 +32,9 @@ def _convert_to_12h(time_str):
 def render_breaks_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
-    BREAKS = _get_breaks_schedule()
+    
+    # ── Load break schedule from database ───────────────────────────────────
+    BREAKS = get_break_schedule()
 
     st.markdown("""
     <style>
@@ -70,10 +50,18 @@ def render_breaks_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Admin: Edit break schedule ────────────────────────────────────────────
+    # ── Admin: Edit break schedule (saves to database) ──────────────────────
     if is_admin:
-        with st.expander("⚙️ Edit Break Schedule", expanded=False):
-            st.markdown("**Customize break times — changes apply immediately for everyone.**")
+        with st.expander("⚙️ Edit Break Schedule (Applies to All Users)", expanded=False):
+            st.markdown("""
+            <div style="background:rgba(79,107,255,0.08);border:1px solid rgba(79,107,255,0.2);
+                        border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
+                <p style="color:#8B90A8;font-size:0.85rem;">
+                    ⚠️ <strong>Admin Only:</strong> Changes to the break schedule will apply to <strong>ALL</strong> users immediately.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
             new_schedule = []
             cols = st.columns(3)
             for i, brk in enumerate(BREAKS):
@@ -82,25 +70,63 @@ def render_breaks_tab(user: dict):
                     
                     # Start time (12-hour format)
                     col_h, col_m, col_ampm = st.columns(3)
-                    with col_h:
-                        start_h = st.number_input("Hour", min_value=1, max_value=12, value=int(brk["start"].split(":")[0]) if int(brk["start"].split(":")[0]) <= 12 else int(brk["start"].split(":")[0]) - 12, key=f"brk_start_h_{i}")
-                    with col_m:
-                        start_m = st.selectbox("Min", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"brk_start_m_{i}")
-                    with col_ampm:
-                        start_ampm = st.selectbox("AM/PM", ["AM", "PM"], key=f"brk_start_ampm_{i}")
+                    start_h = int(brk["start"].split(":")[0])
+                    start_h_12 = start_h if start_h <= 12 else start_h - 12
+                    start_ampm_default = "PM" if start_h >= 12 else "AM"
+                    if start_h == 0:
+                        start_h_12 = 12
+                        start_ampm_default = "AM"
+                    if start_h == 12:
+                        start_ampm_default = "PM"
                     
-                    start_24 = _convert_to_24h(start_h, start_m, start_ampm)
+                    with col_h:
+                        new_start_h = st.number_input("H", min_value=1, max_value=12, value=start_h_12, key=f"brk_start_h_{i}")
+                    with col_m:
+                        new_start_m = st.selectbox("M", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], 
+                                                   index=[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].index(int(brk["start"].split(":")[1])), 
+                                                   key=f"brk_start_m_{i}")
+                    with col_ampm:
+                        new_start_ampm = st.selectbox("AM/PM", ["AM", "PM"], 
+                                                      index=0 if start_ampm_default == "AM" else 1, 
+                                                      key=f"brk_start_ampm_{i}")
+                    
+                    # Convert to 24-hour
+                    start_h_24 = new_start_h
+                    if new_start_ampm == "PM" and new_start_h != 12:
+                        start_h_24 = new_start_h + 12
+                    elif new_start_ampm == "AM" and new_start_h == 12:
+                        start_h_24 = 0
+                    start_24 = f"{start_h_24:02d}:{new_start_m:02d}"
                     
                     # End time (12-hour format)
                     col_h2, col_m2, col_ampm2 = st.columns(3)
-                    with col_h2:
-                        end_h = st.number_input("Hour", min_value=1, max_value=12, value=int(brk["end"].split(":")[0]) if int(brk["end"].split(":")[0]) <= 12 else int(brk["end"].split(":")[0]) - 12, key=f"brk_end_h_{i}")
-                    with col_m2:
-                        end_m = st.selectbox("Min", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"brk_end_m_{i}")
-                    with col_ampm2:
-                        end_ampm = st.selectbox("AM/PM", ["AM", "PM"], key=f"brk_end_ampm_{i}")
+                    end_h = int(brk["end"].split(":")[0])
+                    end_h_12 = end_h if end_h <= 12 else end_h - 12
+                    end_ampm_default = "PM" if end_h >= 12 else "AM"
+                    if end_h == 0:
+                        end_h_12 = 12
+                        end_ampm_default = "AM"
+                    if end_h == 12:
+                        end_ampm_default = "PM"
                     
-                    end_24 = _convert_to_24h(end_h, end_m, end_ampm)
+                    with col_h2:
+                        new_end_h = st.number_input("H", min_value=1, max_value=12, value=end_h_12, key=f"brk_end_h_{i}")
+                    with col_m2:
+                        new_end_m = st.selectbox("M", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
+                                                 index=[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].index(int(brk["end"].split(":")[1])),
+                                                 key=f"brk_end_m_{i}")
+                    with col_ampm2:
+                        new_end_ampm = st.selectbox("AM/PM", ["AM", "PM"],
+                                                    index=0 if end_ampm_default == "AM" else 1,
+                                                    key=f"brk_end_ampm_{i}")
+                    
+                    # Convert to 24-hour
+                    end_h_24 = new_end_h
+                    if new_end_ampm == "PM" and new_end_h != 12:
+                        end_h_24 = new_end_h + 12
+                    elif new_end_ampm == "AM" and new_end_h == 12:
+                        end_h_24 = 0
+                    end_24 = f"{end_h_24:02d}:{new_end_m:02d}"
                     
                     new_schedule.append({
                         "name": brk["name"],
@@ -108,12 +134,13 @@ def render_breaks_tab(user: dict):
                         "start": start_24,
                         "end": end_24,
                     })
-            if st.button("💾 Save Break Schedule", key="save_brk_schedule"):
-                st.session_state.break_schedule = new_schedule
-                st.success("Break schedule updated!")
+            
+            if st.button("💾 Save Break Schedule (Apply to All)", key="save_brk_schedule"):
+                save_break_schedule(new_schedule)
+                st.success("✅ Break schedule updated for ALL users!")
                 st.rerun()
 
-    # ── Break cards ──────────────────────────────────────────────────────────
+    # ── Break cards (using schedule from database) ──────────────────────────
     st.markdown("### ☕ Break Schedule")
     cols = st.columns(3)
     for i, brk in enumerate(BREAKS):
