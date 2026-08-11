@@ -12,7 +12,8 @@ from modules.tabs.breaks_tab import render_breaks_tab
 from modules.tabs.callbacks_tab import render_callbacks_tab
 from modules.tabs.admin_tab import render_admin_tab
 from modules.tabs.maps_tab import render_maps_tab
-from modules.tabs.reports_tab import render_reports_tab  # ✅ جديد
+from modules.tabs.reports_tab import render_reports_tab
+from modules.tabs.messages_tab import render_messages_tab
 from modules.components import profile_card, notes_panel, performance_dashboard
 from datetime import datetime
 
@@ -42,9 +43,9 @@ def render_workspace():
     is_admin = user["role"] in ("admin", "leader")
 
     if is_admin:
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports", "🛡️ Admin"]
+        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports", "📧 Messages", "🛡️ Admin"]
     else:
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports"]
+        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports", "📧 Messages"]
 
     selected_tab = st.radio(
         "Navigation",
@@ -68,8 +69,10 @@ def render_workspace():
         render_callbacks_tab(user)
     elif selected_tab == "🗺️ Maps":
         render_maps_tab(user)
-    elif selected_tab == "📊 Reports":              # ✅ جديد
+    elif selected_tab == "📊 Reports":
         render_reports_tab(user)
+    elif selected_tab == "📧 Messages":
+        render_messages_tab(user)
     elif selected_tab == "🛡️ Admin" and is_admin:
         render_admin_tab(user)
 
