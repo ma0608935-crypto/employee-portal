@@ -11,7 +11,7 @@ from modules.tabs.attendance_tab import render_attendance_tab
 from modules.tabs.breaks_tab import render_breaks_tab
 from modules.tabs.callbacks_tab import render_callbacks_tab
 from modules.tabs.admin_tab import render_admin_tab
-# from modules.tabs.maps_tab import render_maps_tab  # ← تم إلغاؤه
+# from modules.tabs.maps_tab import render_maps_tab
 from modules.tabs.reports_tab import render_reports_tab
 from modules.tabs.messages_tab import render_messages_tab
 from modules.components import profile_card, notes_panel, performance_dashboard
@@ -42,12 +42,10 @@ def render_workspace():
 
     is_admin = user["role"] in ("admin", "leader")
 
-    # ── تبويبات حسب الدور (من غير Maps) ────────────────────────────────────
+    # ── تبويبات حسب الدور ──────────────────────────────────────────────────
     if is_admin:
-        # الأدمن والليدر
         tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📊 Reports", "📧 Messages", "🛡️ Admin"]
     else:
-        # الموظف العادي
         tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📧 Messages"]
 
     selected_tab = st.radio(
@@ -70,8 +68,6 @@ def render_workspace():
         render_breaks_tab(user)
     elif selected_tab == "📞 Callbacks":
         render_callbacks_tab(user)
-    # elif selected_tab == "🗺️ Maps":  # ← تم إلغاؤه
-    #     render_maps_tab(user)
     elif selected_tab == "📊 Reports":
         render_reports_tab(user)
     elif selected_tab == "📧 Messages":
@@ -83,8 +79,11 @@ def render_workspace():
 def _render_topbar(user):
     role_color = {"admin": "#FF6B6B", "leader": "#FFD166", "employee": "#06D6A0"}
     color = role_color.get(user["role"], "#8B90A8")
-
-    c1, c2, c3 = st.columns([1, 4, 1])
+    
+    # Theme toggle
+    theme_label = "🌙 Dark" if st.session_state.dark_mode else "☀️ Light"
+    
+    c1, c2, c3, c4 = st.columns([1, 3, 1, 1])
     with c1:
         st.markdown(f"""
         <div style="display:flex;align-items:center;gap:10px;padding:0.6rem 0">
@@ -117,6 +116,11 @@ def _render_topbar(user):
         </div>
         """, unsafe_allow_html=True)
     with c3:
+        # Theme toggle button
+        if st.button(f"{theme_label}", key="theme_toggle", help="Toggle Dark/Light Mode"):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+    with c4:
         if st.button("⏻  Sign Out", key="logout_btn"):
             logout()
     st.markdown('<hr style="border-color:#2E3350;margin:0 0 4px 0">', unsafe_allow_html=True)
