@@ -57,6 +57,72 @@ def render_callbacks_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     is_employee = user["role"] == "employee"
 
+    # ── Custom CSS ────────────────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    .cb-card {
+        background: #1A1D27;
+        border: 2px solid #2E3350;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    .cb-card:hover {
+        border-color: #4F6BFF;
+    }
+    .cb-name {
+        font-weight: 600;
+        color: #E8EAF0;
+        font-size: 16px;
+    }
+    .cb-status {
+        padding: 3px 14px;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .cb-status-cold { background: #4F6BFF22; color: #4F6BFF; border: 1px solid #4F6BFF55; }
+    .cb-status-warm { background: #FF9F4322; color: #FF9F43; border: 1px solid #FF9F4355; }
+    .cb-status-hot  { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
+    .cb-status-pending { background: #FFD16622; color: #FFD166; border: 1px solid #FFD16655; }
+    .cb-status-completed { background: #06D6A022; color: #06D6A0; border: 1px solid #06D6A055; }
+    .cb-status-cancelled { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
+    
+    .cb-detail {
+        color: #C8CADE;
+        font-size: 15px;
+        margin-top: 2px;
+    }
+    .cb-detail-icon {
+        color: #8B90A8;
+        margin-right: 4px;
+    }
+    .cb-notes {
+        color: #8B90A8;
+        font-size: 14px;
+        margin-top: 4px;
+        font-style: italic;
+        border-top: 1px solid #2E3350;
+        padding-top: 4px;
+    }
+    .cb-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid #2E3350;
+    }
+    .cb-readonly {
+        color: #8B90A8;
+        font-size: 13px;
+        margin-top: 8px;
+        padding-top: 6px;
+        border-top: 1px solid #2E3350;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # ── Google Sheets config (admin only) ─────────────────────────────────────
     if is_admin:
         with st.expander("🔗 Google Sheets Integration", expanded=False):
@@ -229,133 +295,66 @@ def render_callbacks_tab(user: dict):
     # ── Records ──────────────────────────────────────────────────────────────
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
+    # 3 columns
+    cols = st.columns(3)
+    
     for idx, cb in enumerate(filtered):
-        # Extract address and notes
-        notes_text = cb.get("notes", "")
-        address_text = ""
-        
-        if "📍 Address:" in notes_text:
-            parts = notes_text.split("📍 Address:")
-            if len(parts) > 1:
-                address_parts = parts[1].split("📝 Notes:")
-                address_text = address_parts[0].strip() if address_parts else ""
-                notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
-        elif "Address:" in notes_text:
-            parts = notes_text.split("Address:")
-            if len(parts) > 1:
-                address_parts = parts[1].split("Notes:")
-                address_text = address_parts[0].strip() if address_parts else ""
-                notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
-        
-        # Get status class
-        emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
-        
-        # All statuses list for dropdown
-        all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
-        current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
-        
-        # ── Card باستخدام st.container و HTML ───────────────────────────────
-        with st.container():
-            # HTML للكارد كامل
-            card_html = f'''
-            <div style="
-                background: #1A1D27;
-                border: 2px solid #2E3350;
-                border-radius: 10px;
-                padding: 12px 14px;
-                margin-bottom: 10px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            ">
-                <!-- الصف الأول: الاسم + الحالة -->
-                <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 6px;
-                ">
-                    <span style="
-                        font-weight: 600;
-                        color: #E8EAF0;
-                        font-size: 16px;
-                    ">👤 {cb.get('customer_name', '—')}</span>
-                    <span style="
-                        display: inline-block;
-                        padding: 3px 14px;
-                        border-radius: 16px;
-                        font-size: 13px;
-                        font-weight: 600;
-                        background: #4F6BFF22;
-                        color: #4F6BFF;
-                        border: 1px solid #4F6BFF55;
-                    ">{emoji} {cb['status']}</span>
-                </div>
-                
-                <!-- التليفون -->
-                <div style="
-                    color: #C8CADE;
-                    font-size: 15px;
-                    margin-top: 2px;
-                ">
-                    <span style="color: #8B90A8;">📱</span> {cb.get('phone', '—')}
-                </div>
-            '''
+        with cols[idx % 3]:
             
-            # العنوان لو موجود
+            # Extract address and notes
+            notes_text = cb.get("notes", "")
+            address_text = ""
+            
+            if "📍 Address:" in notes_text:
+                parts = notes_text.split("📍 Address:")
+                if len(parts) > 1:
+                    address_parts = parts[1].split("📝 Notes:")
+                    address_text = address_parts[0].strip() if address_parts else ""
+                    notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
+            elif "Address:" in notes_text:
+                parts = notes_text.split("Address:")
+                if len(parts) > 1:
+                    address_parts = parts[1].split("Notes:")
+                    address_text = address_parts[0].strip() if address_parts else ""
+                    notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
+            
+            # Get status class
+            status_class = f"cb-status-{cb['status'].lower()}"
+            emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
+            
+            # All statuses list for dropdown
+            all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
+            current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
+            
+            # ── Card ──────────────────────────────────────────────────────────
+            st.markdown('<div class="cb-card">', unsafe_allow_html=True)
+            
+            # الصف الأول: الاسم + الحالة
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown(f'<span class="cb-name">👤 {cb.get("customer_name", "—")}</span>', unsafe_allow_html=True)
+            with col2:
+                st.markdown(f'<span class="cb-status {status_class}">{emoji} {cb["status"]}</span>', unsafe_allow_html=True)
+            
+            # التليفون
+            st.markdown(f'<div class="cb-detail"><span class="cb-detail-icon">📱</span> {cb.get("phone", "—")}</div>', unsafe_allow_html=True)
+            
+            # العنوان
             if address_text:
-                card_html += f'''
-                <div style="
-                    color: #C8CADE;
-                    font-size: 15px;
-                    margin-top: 2px;
-                ">
-                    <span style="color: #8B90A8;">📍</span> {address_text}
-                </div>
-                '''
+                st.markdown(f'<div class="cb-detail"><span class="cb-detail-icon">📍</span> {address_text}</div>', unsafe_allow_html=True)
             
             # التاريخ والوقت
-            card_html += f'''
-                <div style="
-                    color: #C8CADE;
-                    font-size: 15px;
-                    margin-top: 2px;
-                ">
-                    <span style="color: #8B90A8;">📅</span> {cb.get('callback_date', '—')} &nbsp; 
-                    <span style="color: #8B90A8;">⏰</span> {cb.get('callback_time', '—')}
-                </div>
-            '''
+            st.markdown(f'<div class="cb-detail"><span class="cb-detail-icon">📅</span> {cb.get("callback_date", "—")} &nbsp; <span class="cb-detail-icon">⏰</span> {cb.get("callback_time", "—")}</div>', unsafe_allow_html=True)
             
-            # الملاحظات لو موجودة
+            # الملاحظات
             if notes_text and notes_text.strip():
-                card_html += f'''
-                <div style="
-                    color: #8B90A8;
-                    font-size: 14px;
-                    margin-top: 4px;
-                    font-style: italic;
-                    border-top: 1px solid #2E3350;
-                    padding-top: 4px;
-                ">
-                    📝 {notes_text}
-                </div>
-                '''
+                st.markdown(f'<div class="cb-notes">📝 {notes_text}</div>', unsafe_allow_html=True)
             
             # الأزرار
             if is_employee:
-                card_html += '''
-                <div style="
-                    display: flex;
-                    gap: 8px;
-                    align-items: center;
-                    margin-top: 10px;
-                    padding-top: 8px;
-                    border-top: 1px solid #2E3350;
-                ">
-                '''
+                st.markdown('<div class="cb-actions">', unsafe_allow_html=True)
                 
-                # استخدم st.selectbox و st.button جوا HTML
-                st.markdown(card_html, unsafe_allow_html=True)
-                
-                # الأزرار باستخدام Streamlit
+                # Dropdown + Update + Delete في صف واحد
                 col_sel, col_upd, col_del = st.columns([2, 1, 1])
                 with col_sel:
                     new_status = st.selectbox(
@@ -378,18 +377,7 @@ def render_callbacks_tab(user: dict):
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                card_html += '''
-                <div style="
-                    margin-top: 8px;
-                    padding-top: 6px;
-                    border-top: 1px solid #2E3350;
-                    color: #8B90A8;
-                    font-size: 13px;
-                ">
-                    🔒 Read-only
-                </div>
-                '''
-                st.markdown(card_html, unsafe_allow_html=True)
+                st.markdown('<div class="cb-readonly">🔒 Read-only</div>', unsafe_allow_html=True)
             
             st.markdown('</div>', unsafe_allow_html=True)
 
