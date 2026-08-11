@@ -66,30 +66,32 @@ def render_callbacks_tab(user: dict):
         padding: 1rem 1.25rem;
         margin-bottom: 0.75rem;
     }
+    .cb-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .cb-info {
+        flex: 1;
+    }
     .cb-name {
         font-weight: 600;
         color: #E8EAF0;
         font-size: 1rem;
+        margin-bottom: 2px;
     }
-    .cb-phone {
+    .cb-detail {
         color: #8B90A8;
         font-size: 0.9rem;
+        margin-top: 2px;
     }
-    .cb-address {
-        color: #8B90A8;
-        font-size: 0.9rem;
-    }
-    .cb-dt {
-        color: #C8CADE;
-        font-size: 0.85rem;
-    }
-    .cb-notes {
-        color: #8B90A8;
-        font-size: 0.85rem;
-        font-style: italic;
-        border-top: 1px solid #2E3350;
-        padding-top: 6px;
-        margin-top: 4px;
+    .cb-status-area {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        min-width: 100px;
     }
     .status-pill {
         display: inline-block;
@@ -99,28 +101,11 @@ def render_callbacks_tab(user: dict):
         font-weight: 600;
         text-align: center;
     }
-    .cb-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-    }
-    .cb-left {
-        flex: 1;
-    }
-    .cb-right {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
-        min-width: 140px;
-    }
     .cb-actions {
         display: flex;
         gap: 6px;
         align-items: center;
-        flex-wrap: wrap;
-        justify-content: flex-end;
+        margin-top: 6px;
     }
     .cb-actions select {
         background: #1A1D27;
@@ -155,6 +140,14 @@ def render_callbacks_tab(user: dict):
     .readonly-text {
         color: #8B90A8;
         font-size: 0.75rem;
+    }
+    .cb-notes {
+        color: #8B90A8;
+        font-size: 0.85rem;
+        margin-top: 4px;
+        font-style: italic;
+        border-top: 1px solid #2E3350;
+        padding-top: 6px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -282,7 +275,7 @@ def render_callbacks_tab(user: dict):
                         st.error("Customer Name and Phone are required.")
                     else:
                         if address and notes:
-                            full_notes = f"📍 Address: {address}\n\n📝 Notes: {notes}"
+                            full_notes = f"📍 Address: {address}\n📝 Notes: {notes}"
                         elif address:
                             full_notes = f"📍 Address: {address}"
                         else:
@@ -357,29 +350,33 @@ def render_callbacks_tab(user: dict):
             txt_color, bg_color = LEGACY_STATUS_COLORS.get(cb["status"], ("#8B90A8", "#1A1D27"))
             emoji = ""
 
-        # ── Card using st.container with columns ────────────────────────────
+        # ── Card ─────────────────────────────────────────────────────────────
         with st.container():
+            # Main card
             st.markdown(f"""
             <div class="cb-card">
                 <div class="cb-row">
-                    <div class="cb-left">
+                    <div class="cb-info">
                         <div class="cb-name">👤 {cb.get('customer_name', '—')}</div>
-                        <div class="cb-phone">📱 {cb.get('phone', '—')}</div>
             """, unsafe_allow_html=True)
             
+            # Phone
+            st.markdown(f'<div class="cb-detail">📱 {cb.get("phone", "—")}</div>', unsafe_allow_html=True)
+            
+            # Address if exists
             if address_text:
-                st.markdown(f'<div class="cb-address">📍 {address_text}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="cb-detail">📍 {address_text}</div>', unsafe_allow_html=True)
             
-            st.markdown(f"""
-                        <div class="cb-dt">📅 {cb.get('callback_date', '—')} &nbsp; ⏰ {cb.get('callback_time', '—')}</div>
-            """, unsafe_allow_html=True)
+            # Date & Time
+            st.markdown(f'<div class="cb-detail">📅 {cb.get("callback_date", "—")} &nbsp; ⏰ {cb.get("callback_time", "—")}</div>', unsafe_allow_html=True)
             
+            # Notes if exists
             if notes_text and notes_text.strip():
                 st.markdown(f'<div class="cb-notes">📝 {notes_text}</div>', unsafe_allow_html=True)
             
             st.markdown("""
                     </div>
-                    <div class="cb-right">
+                    <div class="cb-status-area">
             """, unsafe_allow_html=True)
             
             # Status badge
@@ -393,26 +390,30 @@ def render_callbacks_tab(user: dict):
                 all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
                 current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
                 
-                # Use columns for select + buttons inside the card
-                col_sel, col_upd, col_del = st.columns([2, 1, 1])
-                with col_sel:
-                    new_status = st.selectbox(
-                        "Status",
-                        all_statuses_list,
-                        index=current_idx,
-                        key=f"stat_{cb['id']}",
-                        label_visibility="collapsed"
-                    )
-                with col_upd:
-                    if st.button("💾", key=f"upd_{cb['id']}", help="Update status"):
-                        update_callback(cb["id"], status=new_status)
-                        _sync_excel()
-                        st.rerun()
-                with col_del:
-                    if st.button("🗑️", key=f"del_{cb['id']}", help="Delete"):
-                        delete_callback(cb["id"])
-                        _sync_excel()
-                        st.rerun()
+                st.markdown('<div class="cb-actions">', unsafe_allow_html=True)
+                
+                # Status dropdown
+                new_status = st.selectbox(
+                    "",
+                    all_statuses_list,
+                    index=current_idx,
+                    key=f"stat_{cb['id']}",
+                    label_visibility="collapsed"
+                )
+                
+                # Update button
+                if st.button("💾 Update", key=f"upd_{cb['id']}"):
+                    update_callback(cb["id"], status=new_status)
+                    _sync_excel()
+                    st.rerun()
+                
+                # Delete button
+                if st.button("🗑️ Delete", key=f"del_{cb['id']}"):
+                    delete_callback(cb["id"])
+                    _sync_excel()
+                    st.rerun()
+                
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="readonly-text">🔒 Read-only</div>', unsafe_allow_html=True)
             
