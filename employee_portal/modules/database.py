@@ -143,6 +143,13 @@ def init_db():
                 created_at      TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
     else:
         # SQLite
         c.execute("""
@@ -206,6 +213,13 @@ def init_db():
                 status          TEXT DEFAULT 'Pending',
                 notes           TEXT,
                 created_at      TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -498,3 +512,41 @@ def get_callbacks(employee_id=None):
     rows = _fetchall(c)
     conn.close()
     return rows
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  System Settings
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_system_setting(key: str, default=None):
+    """Get a system setting from the database."""
+    conn, engine = get_conn()
+    c = conn.cursor()
+    c.execute(_q("SELECT value FROM system_settings WHERE key=?", engine), (key,))
+    row = _fetchone(c)
+    conn.close()
+    
+    if row:
+        return row["value"]
+    return default
+
+
+def set_system_setting(key: str, value: str):
+    """Set a system setting in the database."""
+    conn, engine = get_conn()
+    c = conn.cursor()
+    
+    if engine == "pg":
+        c.execute("""
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+        """, (key, value))
+    else:
+        c.execute("""
+            INSERT OR REPLACE INTO system_settings (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+        """, (key, value))
+    
+    conn.commit()
+    conn.close()
