@@ -23,6 +23,12 @@ def _load_photo(path):
 
 def profile_card(user: dict):
     """Left-side employee profile card."""
+    
+    # Initialize session state for showing upload
+    upload_key = f"show_upload_{user['id']}"
+    if upload_key not in st.session_state:
+        st.session_state[upload_key] = False
+
     st.markdown("""
     <style>
     .pcard {
@@ -107,37 +113,38 @@ def profile_card(user: dict):
         transition: all 0.2s;
         box-shadow: 0 2px 8px rgba(79,107,255,0.4);
         z-index: 10;
+        border: none;
     }
     .avatar-edit-icon:hover {
         transform: scale(1.1);
         background: #3B55E6;
     }
     
-    /* Upload area - hidden by default, shown when pencil clicked */
+    /* Upload area */
     .upload-area {
         margin-top: 8px;
-        padding: 8px 12px;
+        padding: 10px 12px;
         background: #0F1117;
-        border: 1px dashed #2E3350;
+        border: 1px solid #2E3350;
         border-radius: 10px;
-        display: none;
     }
-    .upload-area.show {
-        display: block;
+    .upload-area p {
+        color: #8B90A8;
+        font-size: 0.75rem;
+        margin: 0 0 6px 0;
     }
-    
-    /* Remove button */
-    .remove-btn {
+    .upload-area .remove-btn {
         background: transparent;
         color: #FF6B6B;
-        border: none;
-        font-size: 14px;
-        cursor: pointer;
-        padding: 2px 8px;
+        border: 1px solid #FF6B6B44;
         border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        cursor: pointer;
         transition: all 0.2s;
+        margin-top: 4px;
     }
-    .remove-btn:hover {
+    .upload-area .remove-btn:hover {
         background: #FF6B6B22;
     }
     </style>
@@ -150,50 +157,31 @@ def profile_card(user: dict):
     
     col_av, col_info = st.columns([1, 3])
     with col_av:
-        # Display avatar with edit icon
+        # Display avatar with edit icon (as a button)
         if photo_b64:
-            avatar_html = f'''
+            st.markdown(f'''
             <div class="avatar-wrapper">
                 <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
-                <div class="avatar-edit-icon" id="edit_icon_{user['id']}" onclick="toggleUpload('{user['id']}')">🖊️</div>
             </div>
-            '''
+            ''', unsafe_allow_html=True)
         else:
             initials = "".join(p[0].upper() for p in (user.get("full_name") or "U").split()[:2])
-            avatar_html = f'''
+            st.markdown(f'''
             <div class="avatar-wrapper">
                 <div class="avatar-initials">{initials}</div>
-                <div class="avatar-edit-icon" id="edit_icon_{user['id']}" onclick="toggleUpload('{user['id']}')">🖊️</div>
             </div>
-            '''
+            ''', unsafe_allow_html=True)
         
-        st.markdown(avatar_html, unsafe_allow_html=True)
+        # Edit button (pencil icon)
+        if st.button("🖊️", key=f"edit_photo_{user['id']}", help="Change photo"):
+            st.session_state[upload_key] = not st.session_state[upload_key]
+            st.rerun()
         
-        # ── Hidden file uploader (shows when pencil is clicked) ──────────
-        # Use a container that we can show/hide with JavaScript
-        upload_container = st.container()
-        
-        with upload_container:
-            # Initially hidden upload area
-            st.markdown(f"""
-            <div id="upload_area_{user['id']}" class="upload-area">
-                <p style="color:#8B90A8;font-size:0.75rem;margin:0 0 4px 0;">Click below to upload a new photo</p>
-            </div>
-            <script>
-            function toggleUpload(userId) {{
-                var uploadArea = document.getElementById('upload_area_' + userId);
-                if (uploadArea) {{
-                    if (uploadArea.classList.contains('show')) {{
-                        uploadArea.classList.remove('show');
-                    }} else {{
-                        uploadArea.classList.add('show');
-                    }}
-                }}
-            }}
-            </script>
-            """, unsafe_allow_html=True)
+        # ── Upload area (shown only when session state is True) ────────────
+        if st.session_state[upload_key]:
+            st.markdown('<div class="upload-area">', unsafe_allow_html=True)
+            st.markdown('<p>📸 Upload a new photo</p>', unsafe_allow_html=True)
             
-            # The actual file uploader (inside the toggleable area)
             uploaded = st.file_uploader(
                 "Choose a photo...",
                 type=["jpg", "jpeg", "png"],
@@ -210,6 +198,7 @@ def profile_card(user: dict):
                     f.write(uploaded.read())
                 update_user(user["id"], photo_path=path)
                 st.session_state.user["photo_path"] = path
+                st.session_state[upload_key] = False
                 st.rerun()
 
             # Remove photo button (only if photo exists)
@@ -221,7 +210,10 @@ def profile_card(user: dict):
                         pass
                     update_user(user["id"], photo_path=None)
                     st.session_state.user["photo_path"] = None
+                    st.session_state[upload_key] = False
                     st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
     with col_info:
         dept = user.get("department", "—")
