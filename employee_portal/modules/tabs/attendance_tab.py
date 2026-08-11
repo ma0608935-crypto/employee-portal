@@ -33,58 +33,14 @@ def render_attendance_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # ADMIN VIEW — Manual check-in for any employee
-    # ═══════════════════════════════════════════════════════════════════════════
-    if is_admin:
-        st.markdown("### 🛡️ Admin — Manage Attendance")
-
-        sub1, sub2 = st.tabs(["📋 All Employees", "✅ My Check-In"])
-
-        with sub1:
-            employees = [e for e in get_all_users() if e["role"] == "employee"]
-            
-            if not employees:
-                st.info("No employees found.")
-            else:
-                st.markdown("**Add attendance record for any employee:**")
-                with st.form("manual_att_admin"):
-                    emp_options = {
-                        f"{e.get('full_name','')} ({e.get('employee_id','')})": e
-                        for e in employees
-                    }
-                    selected_label = st.selectbox("Select Employee", list(emp_options.keys()),
-                                                  key="att_emp_sel")
-                    att_dt = st.date_input("Date", value=date.today())
-                    att_tm = st.time_input("Check-In Time")
-                    att_st = st.selectbox("Status", ["Present", "Late", "Absent"])
-                    
-                    if st.form_submit_button("✅ Add Attendance Record"):
-                        emp = emp_options[selected_label]
-                        ok, msg = record_attendance(
-                            emp.get("employee_id"), emp.get("full_name"),
-                            att_dt.isoformat(), att_tm.strftime("%H:%M:%S"), att_st)
-                        if ok:
-                            _sync_excel(get_attendance())
-                            st.success(msg)
-                            st.rerun()
-                        else:
-                            st.warning(msg)
-
-        with sub2:
-            _employee_checkin_block(user, today_str)
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # EMPLOYEE VIEW
-    # ═══════════════════════════════════════════════════════════════════════════
-    else:
-        st.markdown("### 📋 Your Attendance")
-        _employee_checkin_block(user, today_str)
+    # ── Employee view (including admin/leader seeing only their own) ──
+    st.markdown("### 📋 Your Attendance")
+    _employee_checkin_block(user, today_str)
 
     st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
 
-    # ── Metrics ───────────────────────────────────────────────────────────────
-    records = get_attendance(None if is_admin else user.get("employee_id"))
+    # ── Metrics (only for current user) ──────────────────────────────────────
+    records = get_attendance(user.get("employee_id"))
     today_obj = date.today()
     week_start = today_obj - timedelta(days=today_obj.weekday())
     month_start = today_obj.replace(day=1)
@@ -111,7 +67,7 @@ def render_attendance_tab(user: dict):
     with c6:
         st.metric("Absent", total - present - late)
 
-    # ── Charts ────────────────────────────────────────────────────────────────
+    # ── Charts (only for current user) ──────────────────────────────────────
     try:
         import plotly.express as px
         df = pd.DataFrame(records)
@@ -138,21 +94,19 @@ def render_attendance_tab(user: dict):
     except ImportError:
         pass
 
-    # ── Table ─────────────────────────────────────────────────────────────────
-    st.markdown("#### Attendance Records")
+    # ── Table (only for current user) ────────────────────────────────────────
+    st.markdown("#### Your Attendance Records")
     df_show = pd.DataFrame(records)
     if not df_show.empty:
         show_cols = [c for c in ["employee_id", "full_name", "date", "check_in", "status"]
                      if c in df_show.columns]
         st.dataframe(df_show[show_cols], use_container_width=True, height=300)
-        if is_admin:
-            st.download_button("⬇️ Export Attendance CSV",
-                               df_show.to_csv(index=False).encode(),
-                               "attendance.csv", "text/csv")
+    else:
+        st.info("No attendance records yet.")
 
 
 def _employee_checkin_block(user, today_str):
-    """Shared check-in block for both employee and admin's own check-in."""
+    """Shared check-in block for all users (only their own)."""
     st.markdown("#### ✅ Check In")
     today_records = [a for a in get_attendance(user.get("employee_id"))
                      if a["date"] == today_str]
