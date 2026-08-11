@@ -35,20 +35,7 @@ def profile_card(user: dict):
         background: #1A1D27;
         border: 1px solid #2E3350;
         border-radius: 18px;
-        padding: 1.2rem 1.5rem;
-        display: flex;
-        gap: 1.5rem;
-        align-items: flex-start;
-    }
-    .pcard-avatar-section {
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .pcard-info-section {
-        flex: 1;
-        padding-top: 0.2rem;
+        padding: 1.5rem;
     }
     .pcard-name {
         font-family: 'Space Grotesk', sans-serif;
@@ -86,25 +73,25 @@ def profile_card(user: dict):
     .avatar-wrapper {
         position: relative;
         display: inline-block;
-        width: 150px;
-        height: 150px;
+        width: 130px;
+        height: 130px;
     }
     .avatar-wrapper img {
-        width: 150px;
-        height: 150px;
+        width: 130px;
+        height: 130px;
         border-radius: 50%;
         object-fit: cover;
         border: 3px solid #2E3350;
     }
     .avatar-wrapper .avatar-initials {
-        width: 150px;
-        height: 150px;
+        width: 130px;
+        height: 130px;
         border-radius: 50%;
         background: linear-gradient(135deg, #4F6BFF, #7C3AED);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 3.5rem;
+        font-size: 3rem;
         font-weight: 700;
         color: white;
         border: 3px solid #2E3350;
@@ -160,111 +147,107 @@ def profile_card(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Card Container (flex row) ──────────────────────────────────────────
     st.markdown('<div class="pcard">', unsafe_allow_html=True)
     
-    # ── Avatar Section ───────────────────────────────────────────────────────
-    photo_b64 = _load_photo(user.get("photo_path"))
+    # ── استخدام st.columns عشان الصورة والبيانات جنب بعض ──────────────────
+    col_av, col_info = st.columns([1.2, 3], gap="small")
     
-    st.markdown('<div class="pcard-avatar-section">', unsafe_allow_html=True)
-    
-    # Display avatar
-    if photo_b64:
-        st.markdown(f'''
-        <div class="avatar-wrapper">
-            <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
-        </div>
-        ''', unsafe_allow_html=True)
-    else:
-        initials = "".join(p[0].upper() for p in (user.get("full_name") or "U").split()[:2])
-        st.markdown(f'''
-        <div class="avatar-wrapper">
-            <div class="avatar-initials">{initials}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    
-    # Edit button (pencil icon)
-    if st.button("🖊️ Edit Photo", key=f"edit_photo_{user['id']}", help="Change photo"):
-        st.session_state[upload_key] = not st.session_state[upload_key]
-        st.rerun()
-    
-    # ── Upload area (shown only when session state is True) ────────────────
-    if st.session_state[upload_key]:
-        st.markdown('<div class="upload-area">', unsafe_allow_html=True)
-        st.markdown('<p>📸 Upload new photo</p>', unsafe_allow_html=True)
+    # ── Avatar Column ───────────────────────────────────────────────────────
+    with col_av:
+        photo_b64 = _load_photo(user.get("photo_path"))
         
-        uploaded = st.file_uploader(
-            "Choose a photo...",
-            type=["jpg", "jpeg", "png"],
-            key=f"photo_up_{user['id']}",
-            label_visibility="collapsed",
-            accept_multiple_files=False
-        )
+        # Display avatar
+        if photo_b64:
+            st.markdown(f'''
+            <div class="avatar-wrapper">
+                <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
+            </div>
+            ''', unsafe_allow_html=True)
+        else:
+            initials = "".join(p[0].upper() for p in (user.get("full_name") or "U").split()[:2])
+            st.markdown(f'''
+            <div class="avatar-wrapper">
+                <div class="avatar-initials">{initials}</div>
+            </div>
+            ''', unsafe_allow_html=True)
         
-        if uploaded:
-            os.makedirs(PHOTO_DIR, exist_ok=True)
-            ext = uploaded.name.rsplit(".", 1)[-1]
-            path = os.path.join(PHOTO_DIR, f"{user['employee_id']}.{ext}")
-            with open(path, "wb") as f:
-                f.write(uploaded.read())
-            update_user(user["id"], photo_path=path)
-            st.session_state.user["photo_path"] = path
-            st.session_state[upload_key] = False
+        # Edit button (pencil icon)
+        if st.button("🖊️ Edit", key=f"edit_photo_{user['id']}", help="Change photo", use_container_width=True):
+            st.session_state[upload_key] = not st.session_state[upload_key]
             st.rerun()
-
-        # Remove photo button (only if photo exists)
-        if user.get("photo_path") and os.path.exists(user["photo_path"]):
-            if st.button("🗑️ Remove Photo", key=f"del_photo_{user['id']}"):
-                try:
-                    os.remove(user["photo_path"])
-                except:
-                    pass
-                update_user(user["id"], photo_path=None)
-                st.session_state.user["photo_path"] = None
+        
+        # ── Upload area ────────────────────────────────────────────────────
+        if st.session_state[upload_key]:
+            st.markdown('<div class="upload-area">', unsafe_allow_html=True)
+            
+            uploaded = st.file_uploader(
+                "Choose a photo...",
+                type=["jpg", "jpeg", "png"],
+                key=f"photo_up_{user['id']}",
+                label_visibility="collapsed",
+                accept_multiple_files=False
+            )
+            
+            if uploaded:
+                os.makedirs(PHOTO_DIR, exist_ok=True)
+                ext = uploaded.name.rsplit(".", 1)[-1]
+                path = os.path.join(PHOTO_DIR, f"{user['employee_id']}.{ext}")
+                with open(path, "wb") as f:
+                    f.write(uploaded.read())
+                update_user(user["id"], photo_path=path)
+                st.session_state.user["photo_path"] = path
                 st.session_state[upload_key] = False
                 st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)  # end avatar-section
 
-    # ── Info Section ────────────────────────────────────────────────────────
-    st.markdown('<div class="pcard-info-section">', unsafe_allow_html=True)
-    
-    dept = user.get("department", "—")
-    pos = user.get("position", "—")
-    
-    st.markdown(f"""
-    <div class="pcard-name">{user.get('full_name','—')}</div>
-    <div class="pcard-pos">{pos} · {dept}</div>
-    <div class="pcard-info">
-        <div class="pcard-row">
-            <span class="pcard-label">🪪 Employee ID</span>
-            <span class="pcard-val">{user.get('employee_id','—')}</span>
+            # Remove photo button (only if photo exists)
+            if user.get("photo_path") and os.path.exists(user["photo_path"]):
+                if st.button("🗑️ Remove", key=f"del_photo_{user['id']}", use_container_width=True):
+                    try:
+                        os.remove(user["photo_path"])
+                    except:
+                        pass
+                    update_user(user["id"], photo_path=None)
+                    st.session_state.user["photo_path"] = None
+                    st.session_state[upload_key] = False
+                    st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Info Column ────────────────────────────────────────────────────────
+    with col_info:
+        dept = user.get("department", "—")
+        pos = user.get("position", "—")
+        
+        st.markdown(f"""
+        <div class="pcard-name">{user.get('full_name','—')}</div>
+        <div class="pcard-pos">{pos} · {dept}</div>
+        <div class="pcard-info">
+            <div class="pcard-row">
+                <span class="pcard-label">🪪 Employee ID</span>
+                <span class="pcard-val">{user.get('employee_id','—')}</span>
+            </div>
+            <div class="pcard-row">
+                <span class="pcard-label">📧 Email</span>
+                <span class="pcard-val">{user.get('email','—')}</span>
+            </div>
+            <div class="pcard-row">
+                <span class="pcard-label">📱 Phone</span>
+                <span class="pcard-val">{user.get('phone','—')}</span>
+            </div>
+            <div class="pcard-row">
+                <span class="pcard-label">📅 Hired</span>
+                <span class="pcard-val">{user.get('hire_date','—')}</span>
+            </div>
+            <div class="pcard-row">
+                <span class="pcard-label">🏢 Role</span>
+                <span class="pcard-val" style="text-transform:capitalize">
+                    {user.get('role','—')}
+                </span>
+            </div>
         </div>
-        <div class="pcard-row">
-            <span class="pcard-label">📧 Email</span>
-            <span class="pcard-val">{user.get('email','—')}</span>
-        </div>
-        <div class="pcard-row">
-            <span class="pcard-label">📱 Phone</span>
-            <span class="pcard-val">{user.get('phone','—')}</span>
-        </div>
-        <div class="pcard-row">
-            <span class="pcard-label">📅 Hired</span>
-            <span class="pcard-val">{user.get('hire_date','—')}</span>
-        </div>
-        <div class="pcard-row">
-            <span class="pcard-label">🏢 Role</span>
-            <span class="pcard-val" style="text-transform:capitalize">
-                {user.get('role','—')}
-            </span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)  # end info-section
-    st.markdown('</div>', unsafe_allow_html=True)  # end pcard
+        """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def notes_panel(user: dict):
