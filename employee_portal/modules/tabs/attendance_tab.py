@@ -12,10 +12,23 @@ from modules.database import record_attendance, get_attendance, get_all_users
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
 
+# ✅ وقت الحضور المتوقع (5:00 PM)
+EXPECTED_HOUR = 17
+EXPECTED_MINUTE = 0
+
 
 def _sync_excel(records):
     os.makedirs(DATA_DIR, exist_ok=True)
     pd.DataFrame(records).to_excel(ATT_FILE, index=False)
+
+
+def _is_late(check_hour, check_minute):
+    """Check if the check-in time is late (after 5:00 PM)."""
+    if check_hour > EXPECTED_HOUR:
+        return True
+    elif check_hour == EXPECTED_HOUR and check_minute > EXPECTED_MINUTE:
+        return True
+    return False
 
 
 def render_attendance_tab(user: dict):
@@ -93,11 +106,11 @@ def render_attendance_tab(user: dict):
                 # Time picker in 12-hour format
                 col3, col4 = st.columns(2)
                 with col3:
-                    check_hour = st.number_input("Hour", min_value=1, max_value=12, value=9, key="att_admin_hour")
+                    check_hour = st.number_input("Hour", min_value=1, max_value=12, value=5, key="att_admin_hour")
                 with col4:
                     check_minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key="att_admin_min")
                 
-                am_pm = st.selectbox("AM/PM", ["AM", "PM"], key="att_admin_ampm")
+                am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key="att_admin_ampm")  # Default PM
                 
                 # Status selection
                 status_opt = st.selectbox("Status", ["Present", "Late", "Absent"], key="att_admin_status")
@@ -130,7 +143,7 @@ def render_attendance_tab(user: dict):
                         st.warning(msg)
         
         with tab2:
-            _employee_checkin_block(user, today_str, is_admin=False)
+            _employee_checkin_block(user, today_str, is_admin=True)
     
     # ── Employee View ────────────────────────────────────────────────────────
     else:
@@ -255,11 +268,11 @@ def _employee_checkin_block(user, today_str, is_admin=False):
             
             col1, col2 = st.columns(2)
             with col1:
-                check_hour = st.number_input("Hour", min_value=1, max_value=12, value=9, key=f"emp_hour_{user['id']}")
+                check_hour = st.number_input("Hour", min_value=1, max_value=12, value=5, key=f"emp_hour_{user['id']}")
             with col2:
                 check_minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"emp_min_{user['id']}")
             
-            am_pm = st.selectbox("AM/PM", ["AM", "PM"], key=f"emp_ampm_{user['id']}")
+            am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"emp_ampm_{user['id']}")  # Default PM
             status_opt = st.selectbox("Status", ["Present", "Late"], key=f"emp_status_{user['id']}")
             
             if st.button("📍 Check In", key=f"checkin_admin_{user['id']}", use_container_width=True):
@@ -272,12 +285,16 @@ def _employee_checkin_block(user, today_str, is_admin=False):
                 
                 time_str = f"{hour_24:02d}:{check_minute:02d}:00"
                 
+                # Auto-detect if late
+                is_late = _is_late(hour_24, check_minute)
+                final_status = "Late" if is_late else status_opt
+                
                 ok, msg = record_attendance(
                     user.get("employee_id"),
                     user.get("full_name"),
                     today_str,
                     time_str,
-                    status_opt
+                    final_status
                 )
                 if ok:
                     st.success(f"✅ Checked in at {check_hour}:{check_minute:02d} {am_pm}")
@@ -288,15 +305,17 @@ def _employee_checkin_block(user, today_str, is_admin=False):
         else:
             # Employee: auto check-in
             now = datetime.now()
-            is_late = now.time() > datetime.strptime("09:15", "%H:%M").time()
+            is_late = _is_late(now.hour, now.minute)
             
             if is_late:
-                st.warning(f"⏰ Late! Current time: {now.strftime('%I:%M %p')} (Expected before 9:15 AM)")
+                st.warning(f"⏰ Late! Current time: {now.strftime('%I:%M %p')} (Expected before 5:00 PM)")
+            else:
+                st.success(f"✅ On time! Current time: {now.strftime('%I:%M %p')}")
             
             if st.button("📍 Check In Now", key=f"checkin_{user['id']}", use_container_width=True):
                 now = datetime.now()
                 time_str = now.strftime("%H:%M:%S")
-                status = "Late" if is_late else "Present"
+                status = "Late" if _is_late(now.hour, now.minute) else "Present"
                 
                 ok, msg = record_attendance(
                     user.get("employee_id"),
