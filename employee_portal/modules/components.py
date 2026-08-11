@@ -96,8 +96,8 @@ def profile_card(user: dict):
         background: #4F6BFF;
         border: 2px solid #1A1D27;
         border-radius: 50%;
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -106,10 +106,39 @@ def profile_card(user: dict):
         cursor: pointer;
         transition: all 0.2s;
         box-shadow: 0 2px 8px rgba(79,107,255,0.4);
+        z-index: 10;
     }
     .avatar-edit-icon:hover {
         transform: scale(1.1);
         background: #3B55E6;
+    }
+    
+    /* Upload area - hidden by default, shown when pencil clicked */
+    .upload-area {
+        margin-top: 8px;
+        padding: 8px 12px;
+        background: #0F1117;
+        border: 1px dashed #2E3350;
+        border-radius: 10px;
+        display: none;
+    }
+    .upload-area.show {
+        display: block;
+    }
+    
+    /* Remove button */
+    .remove-btn {
+        background: transparent;
+        color: #FF6B6B;
+        border: none;
+        font-size: 14px;
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 6px;
+        transition: all 0.2s;
+    }
+    .remove-btn:hover {
+        background: #FF6B6B22;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -126,7 +155,7 @@ def profile_card(user: dict):
             avatar_html = f'''
             <div class="avatar-wrapper">
                 <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
-                <div class="avatar-edit-icon" title="Change photo">🖊️</div>
+                <div class="avatar-edit-icon" id="edit_icon_{user['id']}" onclick="toggleUpload('{user['id']}')">🖊️</div>
             </div>
             '''
         else:
@@ -134,36 +163,58 @@ def profile_card(user: dict):
             avatar_html = f'''
             <div class="avatar-wrapper">
                 <div class="avatar-initials">{initials}</div>
-                <div class="avatar-edit-icon" title="Add photo">🖊️</div>
+                <div class="avatar-edit-icon" id="edit_icon_{user['id']}" onclick="toggleUpload('{user['id']}')">🖊️</div>
             </div>
             '''
         
         st.markdown(avatar_html, unsafe_allow_html=True)
         
-        # ── Hidden file uploader (triggered by pencil icon) ──────────────
-        uploaded = st.file_uploader(
-            "",
-            type=["jpg", "jpeg", "png"],
-            key=f"photo_up_{user['id']}",
-            label_visibility="collapsed",
-            accept_multiple_files=False
-        )
+        # ── Hidden file uploader (shows when pencil is clicked) ──────────
+        # Use a container that we can show/hide with JavaScript
+        upload_container = st.container()
         
-        if uploaded:
-            os.makedirs(PHOTO_DIR, exist_ok=True)
-            ext = uploaded.name.rsplit(".", 1)[-1]
-            path = os.path.join(PHOTO_DIR, f"{user['employee_id']}.{ext}")
-            with open(path, "wb") as f:
-                f.write(uploaded.read())
-            update_user(user["id"], photo_path=path)
-            st.session_state.user["photo_path"] = path
-            st.rerun()
+        with upload_container:
+            # Initially hidden upload area
+            st.markdown(f"""
+            <div id="upload_area_{user['id']}" class="upload-area">
+                <p style="color:#8B90A8;font-size:0.75rem;margin:0 0 4px 0;">Click below to upload a new photo</p>
+            </div>
+            <script>
+            function toggleUpload(userId) {{
+                var uploadArea = document.getElementById('upload_area_' + userId);
+                if (uploadArea) {{
+                    if (uploadArea.classList.contains('show')) {{
+                        uploadArea.classList.remove('show');
+                    }} else {{
+                        uploadArea.classList.add('show');
+                    }}
+                }}
+            }}
+            </script>
+            """, unsafe_allow_html=True)
+            
+            # The actual file uploader (inside the toggleable area)
+            uploaded = st.file_uploader(
+                "Choose a photo...",
+                type=["jpg", "jpeg", "png"],
+                key=f"photo_up_{user['id']}",
+                label_visibility="collapsed",
+                accept_multiple_files=False
+            )
+            
+            if uploaded:
+                os.makedirs(PHOTO_DIR, exist_ok=True)
+                ext = uploaded.name.rsplit(".", 1)[-1]
+                path = os.path.join(PHOTO_DIR, f"{user['employee_id']}.{ext}")
+                with open(path, "wb") as f:
+                    f.write(uploaded.read())
+                update_user(user["id"], photo_path=path)
+                st.session_state.user["photo_path"] = path
+                st.rerun()
 
-        # ── Remove photo button (small, hidden until hover) ──────────────
-        if user.get("photo_path") and os.path.exists(user["photo_path"]):
-            col_remove, _ = st.columns([1, 3])
-            with col_remove:
-                if st.button("🗑️", key="del_photo", help="Remove photo"):
+            # Remove photo button (only if photo exists)
+            if user.get("photo_path") and os.path.exists(user["photo_path"]):
+                if st.button("🗑️ Remove Photo", key=f"del_photo_{user['id']}"):
                     try:
                         os.remove(user["photo_path"])
                     except:
@@ -249,7 +300,7 @@ def notes_panel(user: dict):
 
     # Add note form (leaders/admins only)
     if is_leader:
-        target_emp = user.get("employee_id")  # default self; can override in admin tab
+        target_emp = user.get("employee_id")
         new_note = st.text_area("Add a note", placeholder="Write a note for this employee…",
                                 key="new_note_input", height=80, label_visibility="collapsed")
         if st.button("📌 Add Note", key="notes_panel_add_btn", use_container_width=True):
