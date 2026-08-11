@@ -27,24 +27,34 @@ except:
 
 
 class PDFReport(FPDF):
-    """Custom PDF class for employee reports."""
+    """Custom PDF class for employee reports with UTF-8 support."""
     
     def __init__(self, employee, stats):
         super().__init__()
         self.employee = employee
         self.stats = stats
         self.set_auto_page_break(auto=True, margin=15)
+        
+        # Add Unicode font (DejaVu)
+        try:
+            # Try to use built-in DejaVu font
+            self.add_font('DejaVu', '', 'DejaVuSansCondensed.ttf', uni=True)
+            self.add_font('DejaVu', 'B', 'DejaVuSansCondensed-Bold.ttf', uni=True)
+            self.font_name = 'DejaVu'
+        except:
+            # Fallback to Helvetica (ASCII only)
+            self.font_name = 'Helvetica'
     
     def header(self):
         """Header for each page."""
-        self.set_fill_color(26, 29, 39)  # #1A1D27
+        self.set_fill_color(26, 29, 39)
         self.rect(0, 0, 210, 30, 'F')
         
         self.set_text_color(255, 255, 255)
-        self.set_font('Arial', 'B', 16)
+        self.set_font(self.font_name, 'B', 16)
         self.cell(0, 10, 'Employee Performance Report', 0, 1, 'C')
         
-        self.set_font('Arial', '', 10)
+        self.set_font(self.font_name, '', 10)
         self.set_text_color(180, 180, 180)
         self.cell(0, 6, f'Generated: {datetime.now().strftime("%B %d, %Y %I:%M %p")}', 0, 1, 'C')
         
@@ -54,24 +64,28 @@ class PDFReport(FPDF):
         """Footer for each page."""
         self.set_y(-15)
         self.set_text_color(128, 128, 128)
-        self.set_font('Arial', 'I', 8)
+        self.set_font(self.font_name, 'I', 8)
         self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
     
-    def chapter_title(self, title, color=(79, 107, 255)):
+    def chapter_title(self, title):
         """Section title."""
         self.set_fill_color(26, 29, 39)
         self.rect(10, self.get_y(), 190, 8, 'F')
         
         self.set_text_color(232, 234, 240)
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 8, f'  {title}', 0, 1, 'L')
+        self.set_font(self.font_name, 'B', 12)
+        # Remove emojis for PDF compatibility
+        clean_title = ''.join(c for c in title if ord(c) < 0x10000)
+        self.cell(0, 8, f'  {clean_title}', 0, 1, 'L')
         self.ln(2)
     
-    def add_stats_row(self, label, value, color=(200, 200, 200)):
+    def add_stats_row(self, label, value):
         """Add a statistics row."""
-        self.set_font('Arial', '', 10)
+        self.set_font(self.font_name, '', 10)
         self.set_text_color(139, 144, 168)
-        self.cell(80, 7, label, 0, 0, 'L')
+        # Remove emojis for PDF compatibility
+        clean_label = ''.join(c for c in label if ord(c) < 0x10000)
+        self.cell(80, 7, clean_label, 0, 0, 'L')
         self.set_text_color(200, 202, 222)
         self.cell(0, 7, str(value), 0, 1, 'L')
     
@@ -156,7 +170,7 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.add_page()
     
     # ── Employee Info ────────────────────────────────────────────────────────
-    pdf.chapter_title("👤 Employee Information")
+    pdf.chapter_title("Employee Information")
     
     pdf.add_stats_row("Employee Name", employee.get("full_name", "—"))
     pdf.add_stats_row("Employee ID", employee.get("employee_id", "—"))
@@ -171,19 +185,19 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.add_divider()
     
     # ── Attendance ──────────────────────────────────────────────────────────
-    pdf.chapter_title("📋 Attendance Summary")
+    pdf.chapter_title("Attendance Summary")
     
     pdf.add_stats_row("Total Working Days", stats["attendance"]["total_days"])
-    pdf.add_stats_row("✅ Present", stats["attendance"]["present"])
-    pdf.add_stats_row("⏰ Late", stats["attendance"]["late"])
-    pdf.add_stats_row("❌ Absent", stats["attendance"]["absent"])
-    pdf.add_stats_row("📊 Attendance Rate", f"{stats['attendance']['rate']}%")
+    pdf.add_stats_row("Present", stats["attendance"]["present"])
+    pdf.add_stats_row("Late", stats["attendance"]["late"])
+    pdf.add_stats_row("Absent", stats["attendance"]["absent"])
+    pdf.add_stats_row("Attendance Rate", f"{stats['attendance']['rate']}%")
     
     pdf.ln(4)
     pdf.add_divider()
     
     # ── Breaks ──────────────────────────────────────────────────────────────
-    pdf.chapter_title("☕ Break Summary")
+    pdf.chapter_title("Break Summary")
     
     pdf.add_stats_row("Total Breaks Taken", stats["breaks"]["total"])
     pdf.add_stats_row("Total Break Time", f"{stats['breaks']['total_minutes']:.0f} min")
@@ -193,18 +207,18 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.add_divider()
     
     # ── Callbacks ───────────────────────────────────────────────────────────
-    pdf.chapter_title("📞 Callback Summary")
+    pdf.chapter_title("Callback Summary")
     
     pdf.add_stats_row("Total Callbacks", stats["callbacks"]["total"])
-    pdf.add_stats_row("✅ Completed", stats["callbacks"]["completed"])
-    pdf.add_stats_row("⏳ Pending", stats["callbacks"]["pending"])
-    pdf.add_stats_row("📊 Completion Rate", f"{stats['callbacks']['rate']}%")
+    pdf.add_stats_row("Completed", stats["callbacks"]["completed"])
+    pdf.add_stats_row("Pending", stats["callbacks"]["pending"])
+    pdf.add_stats_row("Completion Rate", f"{stats['callbacks']['rate']}%")
     
     pdf.ln(4)
     pdf.add_divider()
     
     # ── Sales ──────────────────────────────────────────────────────────────
-    pdf.chapter_title("💰 Sales Summary")
+    pdf.chapter_title("Sales Summary")
     
     pdf.add_stats_row("Total Sales", stats["sales"]["total"])
     pdf.add_stats_row("Total Revenue", f"${stats['sales']['revenue']:,.2f}")
@@ -213,9 +227,9 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.add_divider()
     
     # ── Recent Activity ─────────────────────────────────────────────────────
-    pdf.chapter_title("📝 Recent Activity")
+    pdf.chapter_title("Recent Activity")
     
-    pdf.set_font('Arial', '', 9)
+    pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(139, 144, 168)
     
     # Get recent items
@@ -252,7 +266,7 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     
     if recent_items:
         for item in recent_items:
-            pdf.set_font('Arial', '', 9)
+            pdf.set_font('Helvetica', '', 9)
             pdf.set_text_color(200, 202, 222)
             pdf.cell(30, 6, item["date"], 0, 0, 'L')
             pdf.set_text_color(79, 107, 255)
@@ -263,7 +277,7 @@ def generate_employee_report(employee_id: str) -> BytesIO:
         pdf.add_stats_row("No recent activity", "")
     
     # ── Output ──────────────────────────────────────────────────────────────
-    pdf_bytes = pdf.output(dest='S').encode('latin1')
+    pdf_bytes = pdf.output(dest='S')
     
     return BytesIO(pdf_bytes)
 
