@@ -71,21 +71,21 @@ def render_admin_tab(user: dict):
 
                 col_save, col_del, col_pw = st.columns(3)
                 with col_save:
-                    if st.button("💾 Save", key=f"save_{emp['id']}"):
+                    if st.button("💾 Save", key=f"adm_save_{emp['id']}"):
                         update_user(emp["id"], full_name=new_name, department=new_dept,
                                     position=new_pos, email=new_em,
                                     phone=new_ph, hire_date=new_hd)
                         st.success("Updated!")
                         st.rerun()
                 with col_del:
-                    if st.button("🗑️ Delete", key=f"del_{emp['id']}"):
+                    if st.button("🗑️ Delete", key=f"adm_del_{emp['id']}"):
                         delete_user(emp["id"])
                         st.warning("Employee deactivated.")
                         st.rerun()
                 with col_pw:
                     new_pw = st.text_input("New Password", type="password",
                                            key=f"pw_{emp['id']}")
-                    if st.button("🔑 Reset PW", key=f"rpw_{emp['id']}"):
+                    if st.button("🔑 Reset PW", key=f"adm_rpw_{emp['id']}"):
                         if new_pw:
                             reset_password(emp["id"], new_pw)
                             st.success("Password reset!")
