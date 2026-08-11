@@ -81,7 +81,7 @@ def render_admin_tab(user: dict):
                         st.rerun()
                 with col_pw:
                     new_pw = st.text_input("New Password", type="password", key=f"{k}_pw")
-                    if st.button("🔑 Reset PW", key=f"{k}_rpw"):
+                    if st.button("🔑 Reset PW", key=f"reset_pw_{emp['id']}"):
                         if new_pw:
                             reset_password(emp['id'], new_pw)
                             st.success("Password reset!")
