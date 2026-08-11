@@ -10,6 +10,19 @@ from modules.database import init_db
 from modules.workspace import render_workspace
 
 # ─────────────────────────────────────────────────────────────
+# Auto Backup on startup (optional)
+# ─────────────────────────────────────────────────────────────
+from modules.backup_utils import create_backup
+from datetime import datetime, timedelta
+
+if "last_auto_backup" not in st.session_state:
+    st.session_state.last_auto_backup = None
+
+if st.session_state.last_auto_backup is None or datetime.now() - st.session_state.last_auto_backup > timedelta(days=1):
+    create_backup(upload_to_drive_flag=False)
+    st.session_state.last_auto_backup = datetime.now()
+
+# ─────────────────────────────────────────────────────────────
 # Page Config  (must be first Streamlit call)
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -90,9 +103,6 @@ def get_theme_css():
             border-color: #4F6BFF !important;
             box-shadow: 0 0 0 2px rgba(79,107,255,0.2) !important;
         }
-        div[data-testid="stSelectbox"] div[data-baseweb="select"] div {
-            color: #E8EAF0 !important;
-        }
 
         /* ── Tabs ───────────────────────────────────── */
         div[data-testid="stTabs"] > div > div[role="tablist"] {
@@ -165,6 +175,9 @@ def get_theme_css():
             border-radius: 10px !important;
             border: none !important;
         }
+        div[data-testid="stAlert"] div {
+            color: #E8EAF0 !important;
+        }
 
         /* ── Expander ───────────────────────────────── */
         div[data-testid="stExpander"] {
@@ -194,24 +207,6 @@ def get_theme_css():
         }
         div[data-baseweb="select"] ul li:hover {
             background: #2E3350 !important;
-        }
-
-        /* ── Toggle Switch ──────────────────────────── */
-        .theme-toggle {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0.3rem 0;
-        }
-        .theme-toggle-label {
-            color: #8B90A8;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-
-        /* ── StAlert text ───────────────────────────── */
-        div[data-testid="stAlert"] div {
-            color: #E8EAF0 !important;
         }
         </style>
         """
@@ -258,16 +253,6 @@ def get_theme_css():
             transform: translateY(-1px) !important;
             box-shadow: 0 4px 18px rgba(79,107,255,0.5) !important;
         }
-        /* Secondary buttons (like theme toggle) */
-        div.stButton > button[kind="secondary"] {
-            background: #FFFFFF !important;
-            color: #1A1D27 !important;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
-            border: 1px solid #D0D5E0 !important;
-        }
-        div.stButton > button[kind="secondary"]:hover {
-            background: #F0F2F6 !important;
-        }
 
         /* ── Inputs ─────────────────────────────────── */
         div[data-testid="stTextInput"] input,
@@ -286,9 +271,6 @@ def get_theme_css():
         div[data-testid="stTextArea"] textarea:focus {
             border-color: #4F6BFF !important;
             box-shadow: 0 0 0 2px rgba(79,107,255,0.2) !important;
-        }
-        div[data-testid="stSelectbox"] div[data-baseweb="select"] div {
-            color: #1A1D27 !important;
         }
 
         /* ── Tabs ───────────────────────────────────── */
@@ -383,9 +365,6 @@ def get_theme_css():
         div[data-testid="stExpander"] summary {
             color: #1A1D27 !important;
         }
-        div[data-testid="stExpander"] div {
-            color: #1A1D27 !important;
-        }
 
         /* ── Radio buttons ──────────────────────────── */
         div[data-testid="stRadio"] label {
@@ -405,112 +384,6 @@ def get_theme_css():
         }
         div[data-baseweb="select"] ul li:hover {
             background: #F0F2F6 !important;
-        }
-
-        /* ── Toggle Switch ──────────────────────────── */
-        .theme-toggle {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0.3rem 0;
-        }
-        .theme-toggle-label {
-            color: #6B7280;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-
-        /* ── Image / Logo ───────────────────────────── */
-        .avatar-wrapper .avatar-initials {
-            background: linear-gradient(135deg, #4F6BFF 0%, #7C3AED 100%) !important;
-            color: white !important;
-        }
-
-        /* ── Card backgrounds ───────────────────────── */
-        .cb-card, .pcard, .notes-panel, .att-card, .break-card, .email-card, .report-card {
-            background: #FFFFFF !important;
-            border-color: #D0D5E0 !important;
-        }
-        .cb-card .cb-name, .pcard .pcard-name, .notes-panel .notes-title {
-            color: #1A1D27 !important;
-        }
-        .cb-card .cb-detail, .pcard .pcard-detail, .notes-panel .note-text {
-            color: #4A4A6A !important;
-        }
-        .cb-card .cb-phone, .pcard .pcard-label {
-            color: #6B7280 !important;
-        }
-        .note-item {
-            background: #F0F2F6 !important;
-            border-color: #D0D5E0 !important;
-        }
-        .no-notes {
-            color: #6B7280 !important;
-        }
-        .cb-notes {
-            border-color: #D0D5E0 !important;
-            color: #6B7280 !important;
-        }
-        .checkin-status.checked {
-            background: #E8F5E9 !important;
-            border-color: #06D6A055 !important;
-        }
-        .checkin-status.late {
-            background: #FFF3E0 !important;
-            border-color: #FFD16655 !important;
-        }
-        .checkin-status.checked div,
-        .checkin-status.late div {
-            color: #1A1D27 !important;
-        }
-
-        /* ── Break cards ────────────────────────────── */
-        .break-card {
-            background: #FFFFFF !important;
-            border-color: #D0D5E0 !important;
-        }
-        .break-card .break-name {
-            color: #1A1D27 !important;
-        }
-        .break-card .break-time {
-            color: #6B7280 !important;
-        }
-        .break-card.break-active {
-            background: #E3E8FF !important;
-            border-color: #4F6BFF !important;
-        }
-        .break-card.break-done {
-            background: #E8F5E9 !important;
-            border-color: #06D6A055 !important;
-        }
-
-        /* ── Status pills ───────────────────────────── */
-        .status-pill {
-            color: #1A1D27 !important;
-        }
-        .status-pill.status-cold {
-            background: #E3E8FF !important;
-            color: #4F6BFF !important;
-        }
-        .status-pill.status-warm {
-            background: #FFF3E0 !important;
-            color: #FF9F43 !important;
-        }
-        .status-pill.status-hot {
-            background: #FFEBEE !important;
-            color: #FF6B6B !important;
-        }
-        .status-pill.status-pending {
-            background: #FFF8E1 !important;
-            color: #FFD166 !important;
-        }
-        .status-pill.status-completed {
-            background: #E8F5E9 !important;
-            color: #06D6A0 !important;
-        }
-        .status-pill.status-cancelled {
-            background: #FFEBEE !important;
-            color: #FF6B6B !important;
         }
         </style>
         """
