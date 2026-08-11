@@ -61,42 +61,94 @@ def profile_card(user: dict):
         color: #C8CADE;
         font-weight: 500;
     }
-    .avatar-circle {
-        width: 90px;
-        height: 90px;
+    
+    /* ===== Avatar with pencil icon ===== */
+    .avatar-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 120px;
+        height: 120px;
+    }
+    .avatar-wrapper img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #2E3350;
+    }
+    .avatar-wrapper .avatar-initials {
+        width: 120px;
+        height: 120px;
         border-radius: 50%;
         background: linear-gradient(135deg, #4F6BFF, #7C3AED);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 2.2rem;
+        font-size: 2.8rem;
         font-weight: 700;
         color: white;
         border: 3px solid #2E3350;
+    }
+    .avatar-edit-icon {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        background: #4F6BFF;
+        border: 2px solid #1A1D27;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(79,107,255,0.4);
+    }
+    .avatar-edit-icon:hover {
+        transform: scale(1.1);
+        background: #3B55E6;
     }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="pcard">', unsafe_allow_html=True)
 
-    # Avatar / photo
+    # ── Avatar Section ───────────────────────────────────────────────────────
     photo_b64 = _load_photo(user.get("photo_path"))
+    
     col_av, col_info = st.columns([1, 3])
     with col_av:
+        # Display avatar with edit icon
         if photo_b64:
-            st.markdown(f"""
-            <img src="data:image/jpeg;base64,{photo_b64}"
-                 style="width:90px;height:90px;border-radius:50%;
-                        object-fit:cover;border:3px solid #2E3350"/>
-            """, unsafe_allow_html=True)
+            avatar_html = f'''
+            <div class="avatar-wrapper">
+                <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
+                <div class="avatar-edit-icon" title="Change photo">🖊️</div>
+            </div>
+            '''
         else:
             initials = "".join(p[0].upper() for p in (user.get("full_name") or "U").split()[:2])
-            st.markdown(f'<div class="avatar-circle">{initials}</div>', unsafe_allow_html=True)
-
-        # Upload / change
-        uploaded = st.file_uploader("", type=["jpg","jpeg","png"],
-                                    key=f"photo_up_{user['id']}",
-                                    label_visibility="collapsed")
+            avatar_html = f'''
+            <div class="avatar-wrapper">
+                <div class="avatar-initials">{initials}</div>
+                <div class="avatar-edit-icon" title="Add photo">🖊️</div>
+            </div>
+            '''
+        
+        st.markdown(avatar_html, unsafe_allow_html=True)
+        
+        # ── Hidden file uploader (triggered by pencil icon) ──────────────
+        uploaded = st.file_uploader(
+            "",
+            type=["jpg", "jpeg", "png"],
+            key=f"photo_up_{user['id']}",
+            label_visibility="collapsed",
+            accept_multiple_files=False
+        )
+        
         if uploaded:
             os.makedirs(PHOTO_DIR, exist_ok=True)
             ext = uploaded.name.rsplit(".", 1)[-1]
@@ -107,15 +159,18 @@ def profile_card(user: dict):
             st.session_state.user["photo_path"] = path
             st.rerun()
 
+        # ── Remove photo button (small, hidden until hover) ──────────────
         if user.get("photo_path") and os.path.exists(user["photo_path"]):
-            if st.button("🗑️", key="del_photo", help="Remove photo"):
-                try:
-                    os.remove(user["photo_path"])
-                except:
-                    pass
-                update_user(user["id"], photo_path=None)
-                st.session_state.user["photo_path"] = None
-                st.rerun()
+            col_remove, _ = st.columns([1, 3])
+            with col_remove:
+                if st.button("🗑️", key="del_photo", help="Remove photo"):
+                    try:
+                        os.remove(user["photo_path"])
+                    except:
+                        pass
+                    update_user(user["id"], photo_path=None)
+                    st.session_state.user["photo_path"] = None
+                    st.rerun()
 
     with col_info:
         dept = user.get("department", "—")
