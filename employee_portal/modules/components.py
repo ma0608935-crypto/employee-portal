@@ -197,7 +197,7 @@ def notes_panel(user: dict):
         target_emp = user.get("employee_id")  # default self; can override in admin tab
         new_note = st.text_area("Add a note", placeholder="Write a note for this employee…",
                                 key="new_note_input", height=80, label_visibility="collapsed")
-        if st.button("📌 Add Note", key="add_note_btn", use_container_width=True):
+        if st.button("📌 Add Note", key="notes_panel_add_btn", use_container_width=True):
             if new_note.strip():
                 add_note(target_emp, user.get("full_name", "Leader"), new_note.strip())
                 st.success("Note added.")
