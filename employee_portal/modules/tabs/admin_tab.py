@@ -8,7 +8,7 @@ from modules.database import (
     get_all_users, add_user, update_user, delete_user, reset_password,
     add_note, get_notes, get_attendance, get_breaks, get_callbacks
 )
-from modules.backup_utils import create_backup, get_backup_list, restore_backup, list_drive_files, delete_drive_file
+from modules.backup_utils import create_backup, get_backup_list, restore_backup
 
 _P = "admintab_"
 
@@ -38,7 +38,8 @@ def render_admin_tab(user: dict):
     selected = st.radio(
         "Admin Section",
         ["👥 Employees", "➕ Add Employee", "📋 All Attendance",
-         "☕ All Breaks", "📞 All Callbacks", "📝 Add Note", "💾 Backup & Restore"],
+         "☕ All Breaks", "📞 All Callbacks", "📝 Add Note", 
+         "💾 Backup & Restore", "☁️ Google Drive Backup"],
         horizontal=True,
         label_visibility="collapsed",
         key=f"{_P}nav"
@@ -60,6 +61,8 @@ def render_admin_tab(user: dict):
         render_add_note_section(user)
     elif selected == "💾 Backup & Restore":
         render_backup_restore_section()
+    elif selected == "☁️ Google Drive Backup":
+        render_google_drive_backup_section()
 
 
 def render_employees_section():
@@ -219,36 +222,15 @@ def render_backup_restore_section():
     """Render backup and restore section."""
     st.markdown('<div class="sec-title">💾 Backup & Restore</div>', unsafe_allow_html=True)
     
-    # ── Google Drive Status ────────────────────────────────────────────────
-    try:
-        from modules.backup_utils import get_drive_service
-        service, error = get_drive_service()
-        if service:
-            st.success("✅ Google Drive connected")
-            folder_id = st.secrets.get("drive", {}).get("backup_folder_id", None)
-            if folder_id:
-                st.caption(f"📁 Backup folder ID: {folder_id}")
-            else:
-                st.warning("⚠️ No backup folder ID set. Backups will be stored locally only.")
-        else:
-            st.warning(f"⚠️ Google Drive not configured: {error}")
-    except:
-        st.warning("⚠️ Google Drive not configured. Backups will be stored locally only.")
-    
-    st.markdown("---")
-    
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("#### 📥 Create Backup")
-        upload_to_drive = st.checkbox("📤 Upload to Google Drive", value=True)
-        if st.button("🔄 Create Backup Now", use_container_width=True):
+        if st.button("🔄 Create Local Backup", use_container_width=True):
             with st.spinner("Creating backup..."):
-                success, msg, drive_link = create_backup(upload_to_drive_flag=upload_to_drive)
+                success, msg, link = create_backup(upload_to_drive_flag=False)
                 if success:
                     st.success(f"✅ {msg}")
-                    if drive_link:
-                        st.markdown(f"🔗 [View on Google Drive]({drive_link})")
                 else:
                     st.error(f"❌ {msg}")
     
@@ -282,7 +264,6 @@ def render_backup_restore_section():
         df = pd.DataFrame(backups)
         st.dataframe(df[["filename", "size", "created"]], use_container_width=True)
         
-        # Download backup
         st.markdown("#### ⬇️ Download Backup File")
         selected_download = st.selectbox("Select backup to download", [b["filename"] for b in backups])
         if selected_download:
@@ -298,35 +279,23 @@ def render_backup_restore_section():
                     )
     else:
         st.info("No backups found. Create one first!")
+
+
+def render_google_drive_backup_section():
+    """Render Google Drive backup section."""
+    st.markdown('<div class="sec-title">☁️ Google Drive Backup</div>', unsafe_allow_html=True)
     
-    # ── Google Drive Files ──────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### ☁️ Google Drive Backups")
+    # Check configuration
+    web_app_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+    folder_id = st.secrets.get("drive_apps_script", {}).get("folder_id", None)
     
-    try:
-        files = list_drive_files()
-        if files:
-            for file in files:
-                name = file.get('name', '')
-                file_id = file.get('id', '')
-                created = file.get('createdTime', '')[:16]
-                size = int(file.get('size', 0)) / 1024 if file.get('size') else 0
-                
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.markdown(f"📄 {name}")
-                    st.caption(f"📅 {created}  |  📦 {size:.1f} KB")
-                with col2:
-                    st.markdown(f"[🔗 View](https://drive.google.com/file/d/{file_id}/view)")
-                with col3:
-                    if st.button("🗑️", key=f"del_drive_{file_id}"):
-                        success, msg = delete_drive_file(file_id)
-                        if success:
-                            st.success("Deleted!")
-                            st.rerun()
-                        else:
-                            st.error(msg)
-        else:
-            st.info("No backups found on Google Drive.")
-    except Exception as e:
-        st.info("Google Drive not configured or no backups found.")
+    if not web_app_url:
+        st.warning("""
+        ⚠️ Google Drive backup is not configured.
+        
+        Please add to `.streamlit/secrets.toml`:
+        
+        ```toml
+        [drive_apps_script]
+        web_app_url = "https://script.google.com/macros/s/your-script-id/exec"
+        folder_id = "your-google-drive-folder-id"  # optional
