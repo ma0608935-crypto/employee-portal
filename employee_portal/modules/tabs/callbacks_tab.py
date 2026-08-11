@@ -64,7 +64,7 @@ def render_callbacks_tab(user: dict):
         background: #1A1D27;
         border: 1.5px solid #2E3350;
         border-radius: 10px;
-        padding: 0.7rem 0.9rem;
+        padding: 0.8rem 1rem;
         margin-bottom: 0.6rem;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         transition: all 0.2s;
@@ -79,20 +79,20 @@ def render_callbacks_tab(user: dict):
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
         gap: 8px;
     }
     .cb-name {
         font-weight: 600;
         color: #E8EAF0;
-        font-size: 0.9rem;
+        font-size: 1rem;
         margin: 0;
     }
     .status-pill {
         display: inline-block;
-        padding: 2px 12px;
+        padding: 3px 14px;
         border-radius: 16px;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         font-weight: 600;
         text-align: center;
         white-space: nowrap;
@@ -109,18 +109,18 @@ def render_callbacks_tab(user: dict):
     }
     .cb-detail {
         color: #C8CADE;
-        font-size: 0.82rem;
-        margin-top: 1px;
-        line-height: 1.4;
+        font-size: 0.9rem;
+        margin-top: 2px;
+        line-height: 1.5;
     }
     .cb-detail-icon {
         color: #8B90A8;
-        margin-right: 4px;
+        margin-right: 6px;
     }
     .cb-notes {
         color: #8B90A8;
-        font-size: 0.8rem;
-        margin-top: 3px;
+        font-size: 0.85rem;
+        margin-top: 4px;
         font-style: italic;
         border-top: 1px solid #2E3350;
         padding-top: 4px;
@@ -140,11 +140,11 @@ def render_callbacks_tab(user: dict):
         color: #E8EAF0;
         border: 1px solid #2E3350;
         border-radius: 5px;
-        padding: 3px 8px;
-        font-size: 0.7rem;
+        padding: 4px 10px;
+        font-size: 0.75rem;
         cursor: pointer;
         min-width: 90px;
-        height: 26px;
+        height: 28px;
     }
     .cb-status-select:focus {
         outline: none;
@@ -156,12 +156,12 @@ def render_callbacks_tab(user: dict):
         color: white;
         border: none;
         border-radius: 5px;
-        padding: 4px 12px;
-        font-size: 0.7rem;
+        padding: 4px 14px;
+        font-size: 0.75rem;
         cursor: pointer;
         font-weight: 500;
         transition: all 0.2s;
-        height: 26px;
+        height: 28px;
     }
     .btn-update:hover {
         background: #3B55E6;
@@ -171,12 +171,12 @@ def render_callbacks_tab(user: dict):
         color: white;
         border: none;
         border-radius: 5px;
-        padding: 4px 12px;
-        font-size: 0.7rem;
+        padding: 4px 14px;
+        font-size: 0.75rem;
         cursor: pointer;
         font-weight: 500;
         transition: all 0.2s;
-        height: 26px;
+        height: 28px;
     }
     .btn-delete:hover {
         background: #E65555;
@@ -184,7 +184,7 @@ def render_callbacks_tab(user: dict):
     
     .cb-readonly {
         color: #8B90A8;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
         margin-top: 4px;
     }
     </style>
@@ -362,7 +362,7 @@ def render_callbacks_tab(user: dict):
     # ── Records ──────────────────────────────────────────────────────────────
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
-    # Display in 3 columns عشان نضغط المساحة
+    # Display in 3 columns
     cols = st.columns(3)
     
     for idx, cb in enumerate(filtered):
