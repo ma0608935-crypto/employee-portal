@@ -550,3 +550,51 @@ def set_system_setting(key: str, value: str):
     
     conn.commit()
     conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Break Schedule (System Setting)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_break_schedule():
+    """Get break schedule from database."""
+    schedule_str = get_system_setting("break_schedule", None)
+    if schedule_str:
+        try:
+            import json
+            return json.loads(schedule_str)
+        except:
+            pass
+    # Default schedule
+    return [
+        {"name": "Break 1", "start": "12:00", "end": "12:30", "emoji": "🌞"},
+        {"name": "Break 2", "start": "15:00", "end": "15:30", "emoji": "🌆"},
+        {"name": "Break 3", "start": "18:00", "end": "18:30", "emoji": "🌙"},
+    ]
+
+
+def save_break_schedule(schedule):
+    """Save break schedule to database."""
+    import json
+    set_system_setting("break_schedule", json.dumps(schedule))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Timezone Settings
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_timezone():
+    """Get timezone from database."""
+    tz_str = get_system_setting("timezone", "2:00")
+    try:
+        parts = tz_str.split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1]) if len(parts) > 1 else 0
+        return hours, minutes
+    except:
+        return 2, 0
+
+
+def set_timezone(hours: int, minutes: int):
+    """Save timezone to database."""
+    set_system_setting("timezone", f"{hours}:{minutes:02d}")
