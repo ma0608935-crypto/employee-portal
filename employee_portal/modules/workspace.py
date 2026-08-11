@@ -42,10 +42,13 @@ def render_workspace():
 
     is_admin = user["role"] in ("admin", "leader")
 
+    # ── تبويبات حسب الدور ──────────────────────────────────────────────────
     if is_admin:
+        # الأدمن والليدر يشوفوا كل التبويبات بما فيها Reports و Admin
         tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports", "📧 Messages", "🛡️ Admin"]
     else:
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports", "📧 Messages"]
+        # الموظف العادي مش بيشوف Reports و Admin
+        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📧 Messages"]
 
     selected_tab = st.radio(
         "Navigation",
@@ -70,6 +73,7 @@ def render_workspace():
     elif selected_tab == "🗺️ Maps":
         render_maps_tab(user)
     elif selected_tab == "📊 Reports":
+        # فقط الأدمن والليدر يوصلوا هنا
         render_reports_tab(user)
     elif selected_tab == "📧 Messages":
         render_messages_tab(user)
