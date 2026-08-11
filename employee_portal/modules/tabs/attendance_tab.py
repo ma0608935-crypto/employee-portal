@@ -31,9 +31,27 @@ def _is_late(check_hour, check_minute):
     return False
 
 
+def _get_local_time():
+    """
+    Get local time using JavaScript to detect user's timezone.
+    Falls back to server time if not available.
+    """
+    # Check if we have the user's timezone offset from session
+    if "user_timezone_offset" in st.session_state:
+        offset_minutes = st.session_state.user_timezone_offset
+        # Get UTC time and add offset
+        utc_now = datetime.utcnow()
+        local_now = utc_now + timedelta(minutes=offset_minutes)
+        return local_now
+    
+    # If no timezone set, return server time
+    return datetime.now()
+
+
 def render_attendance_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
+    local_now = _get_local_time()
 
     st.markdown("""
     <style>
@@ -81,6 +99,105 @@ def render_attendance_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
+    # ── Detect Timezone from Browser ────────────────────────────────────────
+    # JavaScript to detect browser timezone offset
+    detect_tz_js = """
+    <script>
+        const timezoneOffset = new Date().getTimezoneOffset();
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'timezone_offset';
+        input.value = -timezoneOffset;  // Convert to minutes (negative because JS returns opposite)
+        input.id = 'tz_offset_input';
+        document.body.appendChild(input);
+        
+        // Send to Streamlit
+        const script = document.createElement('script');
+        script.innerHTML = `
+            const offset = document.getElementById('tz_offset_input').value;
+            const parent = window.parent;
+            const data = {timezone_offset: offset};
+            parent.postMessage({
+                type: 'streamlit:setComponentValue',
+                value: data
+            }, '*');
+        `;
+        document.body.appendChild(script);
+    </script>
+    """
+    
+    # Try to get timezone from browser using a different approach
+    if "user_timezone_offset" not in st.session_state:
+        # Use a hidden component to detect timezone
+        tz_html = f"""
+        <div id="tz_detector">
+            <p style="color:#8B90A8;font-size:0.8rem;">🕐 Detecting your local time...</p>
+            <p style="color:#8B90A8;font-size:0.7rem;" id="tz_display"></p>
+        </div>
+        <script>
+            function detectTimezone() {{
+                const offset = -new Date().getTimezoneOffset();
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+                const hour12 = now.getHours() % 12 || 12;
+                
+                document.getElementById('tz_display').innerHTML = 
+                    `🕐 Your local time: ${hour12}:${minutes}:${seconds} ${ampm}`;
+                
+                // Store timezone offset in session via Streamlit
+                const data = {{timezone_offset: offset}};
+                const event = new CustomEvent('streamlit:setComponentValue', {{
+                    detail: {{value: data}}
+                }});
+                window.dispatchEvent(event);
+            }}
+            detectTimezone();
+        </script>
+        """
+        
+        # Display the timezone detector
+        st.markdown(tz_html, unsafe_allow_html=True)
+        
+        # Add a button to detect timezone
+        if st.button("🕐 Detect My Local Time", key="detect_tz"):
+            # Get current time from browser using JavaScript
+            detect_js = """
+            <script>
+                const now = new Date();
+                const offset = -now.getTimezoneOffset();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                
+                const data = {
+                    timezone_offset: offset,
+                    local_time: `${hours}:${minutes}:${seconds}`
+                };
+                
+                // Send to Streamlit
+                const event = new CustomEvent('streamlit:setComponentValue', {
+                    detail: {value: data}
+                });
+                window.dispatchEvent(event);
+            </script>
+            """
+            st.markdown(detect_js, unsafe_allow_html=True)
+            st.success("✅ Timezone detected!")
+            st.rerun()
+
+    # Show current local time
+    col_tz1, col_tz2 = st.columns([3, 1])
+    with col_tz1:
+        st.caption(f"🕐 Current time: {local_now.strftime('%I:%M:%S %p')}")
+    with col_tz2:
+        if "user_timezone_offset" in st.session_state:
+            st.caption("✅ Timezone: Detected")
+
+    st.markdown("---")
+
     # ── Admin/Leader: Can set check-in time for any employee ────────────────
     if is_admin:
         st.markdown("### 🛡️ Admin — Manage Attendance")
@@ -110,7 +227,7 @@ def render_attendance_tab(user: dict):
                 with col4:
                     check_minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key="att_admin_min")
                 
-                am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key="att_admin_ampm")  # Default PM
+                am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key="att_admin_ampm")
                 
                 # Status selection
                 status_opt = st.selectbox("Status", ["Present", "Late", "Absent"], key="att_admin_status")
@@ -262,6 +379,8 @@ def _employee_checkin_block(user, today_str, is_admin=False):
             key=f"checkin_disabled_{user['id']}"
         )
     else:
+        local_now = _get_local_time()
+        
         if is_admin:
             # Admin/Leader: can pick time
             st.info("You are an admin. You can set a custom check-in time.")
@@ -272,7 +391,7 @@ def _employee_checkin_block(user, today_str, is_admin=False):
             with col2:
                 check_minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"emp_min_{user['id']}")
             
-            am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"emp_ampm_{user['id']}")  # Default PM
+            am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"emp_ampm_{user['id']}")
             status_opt = st.selectbox("Status", ["Present", "Late"], key=f"emp_status_{user['id']}")
             
             if st.button("📍 Check In", key=f"checkin_admin_{user['id']}", use_container_width=True):
@@ -303,19 +422,18 @@ def _employee_checkin_block(user, today_str, is_admin=False):
                 else:
                     st.warning(msg)
         else:
-            # Employee: auto check-in
-            now = datetime.now()
-            is_late = _is_late(now.hour, now.minute)
+            # Employee: auto check-in using local time
+            is_late = _is_late(local_now.hour, local_now.minute)
             
             if is_late:
-                st.warning(f"⏰ Late! Current time: {now.strftime('%I:%M %p')} (Expected before 5:00 PM)")
+                st.warning(f"⏰ Late! Current time: {local_now.strftime('%I:%M %p')} (Expected before 5:00 PM)")
             else:
-                st.success(f"✅ On time! Current time: {now.strftime('%I:%M %p')}")
+                st.success(f"✅ On time! Current time: {local_now.strftime('%I:%M %p')}")
             
             if st.button("📍 Check In Now", key=f"checkin_{user['id']}", use_container_width=True):
-                now = datetime.now()
-                time_str = now.strftime("%H:%M:%S")
-                status = "Late" if _is_late(now.hour, now.minute) else "Present"
+                local_now = _get_local_time()
+                time_str = local_now.strftime("%H:%M:%S")
+                status = "Late" if _is_late(local_now.hour, local_now.minute) else "Present"
                 
                 ok, msg = record_attendance(
                     user.get("employee_id"),
@@ -325,7 +443,7 @@ def _employee_checkin_block(user, today_str, is_admin=False):
                     status
                 )
                 if ok:
-                    st.success(f"✅ Checked in at {now.strftime('%I:%M %p')}")
+                    st.success(f"✅ Checked in at {local_now.strftime('%I:%M %p')}")
                     _sync_excel(get_attendance())
                     st.rerun()
                 else:
