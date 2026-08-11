@@ -11,7 +11,6 @@ from modules.tabs.attendance_tab import render_attendance_tab
 from modules.tabs.breaks_tab import render_breaks_tab
 from modules.tabs.callbacks_tab import render_callbacks_tab
 from modules.tabs.admin_tab import render_admin_tab
-# from modules.tabs.maps_tab import render_maps_tab
 from modules.tabs.reports_tab import render_reports_tab
 from modules.tabs.messages_tab import render_messages_tab
 from modules.components import profile_card, notes_panel, performance_dashboard
@@ -42,7 +41,6 @@ def render_workspace():
 
     is_admin = user["role"] in ("admin", "leader")
 
-    # ── تبويبات حسب الدور ──────────────────────────────────────────────────
     if is_admin:
         tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📊 Reports", "📧 Messages", "🛡️ Admin"]
     else:
