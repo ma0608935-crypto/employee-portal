@@ -8,7 +8,6 @@ import pandas as pd
 import os
 from datetime import date, datetime, timedelta
 from modules.database import record_attendance, get_attendance, get_all_users
-import streamlit.components.v1 as components
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
@@ -16,6 +15,9 @@ ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
 # وقت الحضور المتوقع (5:00 PM)
 EXPECTED_HOUR = 17
 EXPECTED_MINUTE = 0
+
+# المنطقة الزمنية الافتراضية (مصر)
+DEFAULT_TIMEZONE = "+2"
 
 
 def _sync_excel(records):
@@ -34,117 +36,86 @@ def _is_late(check_hour, check_minute):
 
 def _get_local_time():
     """
-    Get local time using JavaScript to detect user's timezone.
-    Falls back to server time if not available.
+    Get local time based on system timezone setting.
     """
-    # Check if we have the user's timezone offset from session
-    if "user_timezone_offset" in st.session_state:
-        offset_minutes = st.session_state.user_timezone_offset
-        # Get UTC time and add offset
+    # Check if timezone is set in session
+    if "system_tz_offset" in st.session_state:
+        offset_hours = st.session_state.system_tz_offset
         utc_now = datetime.utcnow()
-        local_now = utc_now + timedelta(minutes=offset_minutes)
+        local_now = utc_now + timedelta(hours=offset_hours)
         return local_now
     
-    # If no timezone set, return server time
-    return datetime.now()
+    # Fallback to default
+    utc_now = datetime.utcnow()
+    local_now = utc_now + timedelta(hours=int(DEFAULT_TIMEZONE))
+    return local_now
 
 
 def render_attendance_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
-    local_now = _get_local_time()
-
-    st.markdown("""
-    <style>
-    .att-card { background:#1A1D27;border:1px solid #2E3350;border-radius:14px;padding:1.25rem; }
-    .status-badge { display:inline-block;padding:3px 12px;border-radius:20px;
-                    font-size:0.78rem;font-weight:600; }
-    .badge-present { background:#06D6A022;color:#06D6A0;border:1px solid #06D6A055; }
-    .badge-late    { background:#FFD16622;color:#FFD166;border:1px solid #FFD16655; }
-    .badge-absent  { background:#FF6B6B22;color:#FF6B6B;border:1px solid #FF6B6B55; }
-    .checkin-btn {
-        background: linear-gradient(135deg, #4F6BFF 0%, #7C3AED 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 0.75rem 2rem !important;
-        font-weight: 600 !important;
-        font-size: 1rem !important;
-        transition: all 0.2s ease !important;
-        box-shadow: 0 2px 12px rgba(79,107,255,0.35) !important;
-        width: 100% !important;
-    }
-    .checkin-btn:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 4px 18px rgba(79,107,255,0.5) !important;
-    }
-    .checkin-btn:disabled {
-        opacity: 0.6 !important;
-        cursor: not-allowed !important;
-        transform: none !important;
-    }
-    .checkin-status {
-        text-align: center;
-        padding: 1rem;
-        border-radius: 12px;
-        margin-top: 0.5rem;
-    }
-    .checkin-status.checked {
-        background: #06D6A022;
-        border: 1px solid #06D6A055;
-    }
-    .checkin-status.late {
-        background: #FFD16622;
-        border: 1px solid #FFD16655;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # ── Detect Timezone using JavaScript component ──────────────────────────
-    if "user_timezone_offset" not in st.session_state:
-        # Create a hidden component to detect timezone
-        tz_detector = """
-        <div id="tz_detector" style="display:none;">
-            <p id="tz_status">Detecting timezone...</p>
-        </div>
-        <script>
-            function detectAndSendTimezone() {
-                const now = new Date();
-                const offset = -now.getTimezoneOffset();
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                const seconds = String(now.getSeconds()).padStart(2, '0');
-                const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
-                const hour12 = now.getHours() % 12 || 12;
-                
-                const data = {
-                    timezone_offset: offset,
-                    local_time: hours + ':' + minutes + ':' + seconds,
-                    local_time_12: hour12 + ':' + minutes + ':' + seconds + ' ' + ampm
-                };
-                
-                // Send data to Streamlit via parent
-                window.parent.postMessage({
-                    type: 'streamlit:setComponentValue',
-                    value: data
-                }, '*');
-                
-                document.getElementById('tz_status').innerHTML = 
-                    '🕐 Local time detected: ' + data.local_time_12;
+    
+    # ── Timezone Settings (Admin/Leader Only) ───────────────────────────────
+    if is_admin:
+        with st.expander("🌍 System Timezone Settings (Admin Only)", expanded=False):
+            st.markdown("""
+            <div style="background:#1A1D27;border:1px solid #2E3350;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
+                <p style="color:#8B90A8;font-size:0.85rem;">
+                    <strong>⚠️ Admin Only:</strong> Set the system timezone for all users.
+                    <br>Example: Egypt = +2, Saudi = +3, UAE = +4
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Timezone offset options
+            tz_options = {
+                "-12": -12, "-11": -11, "-10": -10, "-9": -9, "-8": -8, "-7": -7,
+                "-6": -6, "-5": -5, "-4": -4, "-3": -3, "-2": -2, "-1": -1,
+                "0 (UTC)": 0,
+                "+1": 1, "+2": 2, "+3": 3, "+4": 4, "+5": 5, "+6": 6,
+                "+7": 7, "+8": 8, "+9": 9, "+10": 10, "+11": 11, "+12": 12
             }
             
-            // Run detection
-            detectAndSendTimezone();
-        </script>
-        """
-        
-        # Use components to run JavaScript
-        components.html(tz_detector, height=0)
-    
-    # Show current local time
-    st.caption(f"🕐 Your local time: {local_now.strftime('%I:%M:%S %p')}")
+            # Get current system timezone
+            current_tz = st.session_state.get("system_tz_offset", int(DEFAULT_TIMEZONE))
+            current_tz_label = f"+{current_tz}" if current_tz >= 0 else str(current_tz)
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                selected_tz = st.selectbox(
+                    "Select system timezone (UTC offset)",
+                    list(tz_options.keys()),
+                    index=list(tz_options.keys()).index(current_tz_label) if current_tz_label in tz_options else 0,
+                    key="tz_select"
+                )
+            with col2:
+                if st.button("✅ Apply to All Users", key="apply_tz_btn"):
+                    st.session_state.system_tz_offset = tz_options[selected_tz]
+                    st.success(f"✅ System timezone set to UTC{selected_tz} for all users!")
+                    st.rerun()
+            
+            # Show current system time
+            local_now = _get_local_time()
+            server_now = datetime.now()
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("🕐 System Local Time", local_now.strftime("%I:%M:%S %p"))
+            with col_b:
+                st.metric("🖥️ Server Time (UTC)", server_now.strftime("%I:%M:%S %p"))
+            
+            st.info(f"✅ Current system timezone: UTC{st.session_state.get('system_tz_offset', int(DEFAULT_TIMEZONE)):+.0f}")
+
+    # ── Show current time for all users ──────────────────────────────────────
+    else:
+        # Regular employees see a small indicator
+        local_now = _get_local_time()
+        tz_offset = st.session_state.get("system_tz_offset", int(DEFAULT_TIMEZONE))
+        st.caption(f"🕐 System time: {local_now.strftime('%I:%M:%S %p')} (UTC{tz_offset:+.0f})")
 
     st.markdown("---")
+    
+    local_now = _get_local_time()
 
     # ── Admin/Leader: Can set check-in time for any employee ────────────────
     if is_admin:
