@@ -6,12 +6,13 @@ PDF Reports for employees — attendance, breaks, and sales.
 import streamlit as st
 import pandas as pd
 import os
+import re
 from datetime import datetime, date, timedelta
 from io import BytesIO
 from fpdf import FPDF
 
 from modules.database import (
-    get_attendance, get_breaks, get_callbacks, get_all_users, get_employee
+    get_attendance, get_breaks, get_all_users, get_employee
 )
 
 # ── Try to import sales data ──────────────────────────────────────────────────
@@ -26,25 +27,33 @@ except:
     sales_df = pd.DataFrame()
 
 
+def clean_text(text):
+    """Remove emojis and special characters that FPDF doesn't support."""
+    if not text:
+        return ""
+    # Remove emojis and special Unicode characters
+    # Keep only ASCII printable characters
+    text = str(text)
+    text = re.sub(r'[^\x00-\x7F]+', ' ', text)  # Remove non-ASCII
+    text = re.sub(r'\s+', ' ', text).strip()    # Clean extra spaces
+    return text
+
+
 class PDFReport(FPDF):
-    """Custom PDF class for employee reports with UTF-8 support."""
+    """Custom PDF class for employee reports."""
     
     def __init__(self, employee, stats):
         super().__init__()
         self.employee = employee
         self.stats = stats
         self.set_auto_page_break(auto=True, margin=15)
-        
-        # Use Helvetica which is clean and readable
         self.font_name = 'Helvetica'
     
     def header(self):
         """Header for each page."""
-        # Dark header background
         self.set_fill_color(26, 29, 39)
         self.rect(0, 0, 210, 32, 'F')
         
-        # White text
         self.set_text_color(255, 255, 255)
         self.set_font(self.font_name, 'B', 16)
         self.cell(0, 10, 'Employee Performance Report', 0, 1, 'C')
@@ -63,33 +72,30 @@ class PDFReport(FPDF):
         self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
     
     def chapter_title(self, title):
-        """Section title with clean white text."""
+        """Section title with clean text."""
         self.set_fill_color(26, 29, 39)
         self.rect(10, self.get_y(), 190, 8, 'F')
         
-        # White text for title
         self.set_text_color(255, 255, 255)
         self.set_font(self.font_name, 'B', 12)
-        self.cell(0, 8, f'  {title}', 0, 1, 'L')
+        clean_title = clean_text(title)
+        self.cell(0, 8, f'  {clean_title}', 0, 1, 'L')
         self.ln(2)
     
-    def add_stats_row(self, label, value, highlight=False):
-        """Add a statistics row with clean white text."""
+    def add_stats_row(self, label, value):
+        """Add a statistics row."""
         self.set_font(self.font_name, '', 10)
         
         # Label in light gray
         self.set_text_color(180, 180, 180)
-        self.cell(90, 7, label, 0, 0, 'L')
+        clean_label = clean_text(label)
+        self.cell(90, 7, clean_label, 0, 0, 'L')
         
         # Value in bright white
-        if highlight:
-            self.set_text_color(79, 107, 255)  # Blue for highlights
-        else:
-            self.set_text_color(255, 255, 255)  # Bright white
-            
-        # Add spacing for better readability
+        self.set_text_color(255, 255, 255)
+        clean_value = clean_text(str(value))
         self.cell(10, 7, '', 0, 0, 'L')
-        self.cell(0, 7, str(value), 0, 1, 'L')
+        self.cell(0, 7, clean_value, 0, 1, 'L')
     
     def add_metric_with_target(self, label, actual, target, unit=""):
         """Add a metric with comparison to target."""
@@ -97,24 +103,27 @@ class PDFReport(FPDF):
         
         # Label
         self.set_text_color(180, 180, 180)
-        self.cell(90, 7, label, 0, 0, 'L')
+        clean_label = clean_text(label)
+        self.cell(90, 7, clean_label, 0, 0, 'L')
         
-        # Actual value (bright white)
+        # Actual value
         self.set_text_color(255, 255, 255)
-        self.cell(30, 7, f"{actual}{unit}", 0, 0, 'L')
+        clean_actual = clean_text(f"{actual}{unit}")
+        self.cell(30, 7, clean_actual, 0, 0, 'L')
         
-        # Target (light gray)
+        # Target
         self.set_text_color(128, 128, 128)
         self.cell(10, 7, '/', 0, 0, 'C')
-        self.cell(30, 7, f"{target}{unit}", 0, 0, 'L')
+        clean_target = clean_text(f"{target}{unit}")
+        self.cell(30, 7, clean_target, 0, 0, 'L')
         
-        # Status indicator
+        # Status indicator - without emojis
         if actual >= target:
             self.set_text_color(6, 214, 160)  # Green
-            status = "✅ On Target"
+            status = "On Target"
         else:
             self.set_text_color(255, 107, 107)  # Red
-            status = "⚠️ Below Target"
+            status = "Below Target"
         
         self.cell(0, 7, status, 0, 1, 'R')
     
@@ -197,14 +206,14 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     # ── Employee Info ────────────────────────────────────────────────────────
     pdf.chapter_title("Employee Information")
     
-    pdf.add_stats_row("Employee Name", employee.get("full_name", "—"))
-    pdf.add_stats_row("Employee ID", employee.get("employee_id", "—"))
-    pdf.add_stats_row("Department", employee.get("department", "—"))
-    pdf.add_stats_row("Position", employee.get("position", "—"))
-    pdf.add_stats_row("Email", employee.get("email", "—"))
-    pdf.add_stats_row("Phone", employee.get("phone", "—"))
-    pdf.add_stats_row("Hire Date", employee.get("hire_date", "—"))
-    pdf.add_stats_row("Role", employee.get("role", "—").capitalize())
+    pdf.add_stats_row("Employee Name", employee.get("full_name", "-"))
+    pdf.add_stats_row("Employee ID", employee.get("employee_id", "-"))
+    pdf.add_stats_row("Department", employee.get("department", "-"))
+    pdf.add_stats_row("Position", employee.get("position", "-"))
+    pdf.add_stats_row("Email", employee.get("email", "-"))
+    pdf.add_stats_row("Phone", employee.get("phone", "-"))
+    pdf.add_stats_row("Hire Date", employee.get("hire_date", "-"))
+    pdf.add_stats_row("Role", employee.get("role", "-").capitalize())
     
     pdf.ln(4)
     pdf.add_divider()
@@ -213,9 +222,10 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.chapter_title("Attendance Summary")
     
     pdf.add_metric_with_target(
-        "Attendance Rate", 
-        f"{stats['attendance']['rate']}%", 
-        f"{stats['attendance']['target']}%"
+        "Attendance Rate",
+        stats['attendance']['rate'],
+        stats['attendance']['target'],
+        "%"
     )
     pdf.add_stats_row("Total Working Days", stats["attendance"]["total_days"])
     pdf.add_stats_row("Present", f"{stats['attendance']['present']} days")
@@ -232,9 +242,10 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     target_hours = stats['breaks']['target_minutes'] / 60
     
     pdf.add_metric_with_target(
-        "Break Time (Target: 1h/day)", 
-        f"{break_hours:.1f}h", 
-        f"{target_hours:.1f}h"
+        "Break Time (Target: 1h/day)",
+        round(break_hours, 1),
+        round(target_hours, 1),
+        "h"
     )
     pdf.add_stats_row("Total Breaks Taken", stats["breaks"]["total"])
     pdf.add_stats_row("Average Break Duration", f"{stats['breaks']['avg_minutes']:.1f} min")
@@ -246,9 +257,10 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.chapter_title("Sales Summary")
     
     pdf.add_metric_with_target(
-        "Total Sales (Target: 5/day)", 
-        stats['sales']['total'], 
-        stats['sales']['target']
+        "Total Sales (Target: 5/day)",
+        stats['sales']['total'],
+        stats['sales']['target'],
+        ""
     )
     
     pdf.ln(4)
@@ -296,11 +308,16 @@ def generate_employee_report(employee_id: str) -> BytesIO:
         for item in recent_items:
             pdf.set_font('Helvetica', '', 9)
             pdf.set_text_color(200, 202, 222)
-            pdf.cell(30, 6, item["date"], 0, 0, 'L')
+            clean_date = clean_text(item["date"])
+            pdf.cell(30, 6, clean_date, 0, 0, 'L')
+            
             pdf.set_text_color(79, 107, 255)
-            pdf.cell(30, 6, item["type"], 0, 0, 'L')
+            clean_type = clean_text(item["type"])
+            pdf.cell(30, 6, clean_type, 0, 0, 'L')
+            
             pdf.set_text_color(255, 255, 255)
-            pdf.cell(0, 6, item["detail"], 0, 1, 'L')
+            clean_detail = clean_text(item["detail"])
+            pdf.cell(0, 6, clean_detail, 0, 1, 'L')
     else:
         pdf.add_stats_row("No recent activity", "")
     
@@ -340,7 +357,7 @@ def render_reports_tab(user: dict):
     
     st.markdown("""
     <div class="report-card">
-        <div class="report-title">📊 Generate Performance Report</div>
+        <div class="report-title">Generate Performance Report</div>
         <div class="report-sub">
             Generate a detailed PDF report for any employee including attendance, breaks, and sales.
         </div>
@@ -358,12 +375,12 @@ def render_reports_tab(user: dict):
         selected_emp_id = emp_options[selected_label]
     else:
         selected_emp_id = user.get("employee_id")
-        st.info(f"👤 Generating report for: **{user.get('full_name', '')}**")
+        st.info(f"Generating report for: **{user.get('full_name', '')}**")
     
     # ── Generate Button ─────────────────────────────────────────────────────
     col1, col2, col3 = st.columns([2, 1, 2])
     with col2:
-        if st.button("📄 Generate PDF Report", use_container_width=True, type="primary"):
+        if st.button("Generate PDF Report", use_container_width=True, type="primary"):
             with st.spinner("Generating report..."):
                 pdf_bytes = generate_employee_report(selected_emp_id)
                 if pdf_bytes:
@@ -371,20 +388,20 @@ def render_reports_tab(user: dict):
                     filename = f"report_{employee.get('full_name', 'employee').replace(' ', '_')}_{date.today()}.pdf"
                     
                     st.download_button(
-                        label="⬇️ Download PDF Report",
+                        label="Download PDF Report",
                         data=pdf_bytes,
                         file_name=filename,
                         mime="application/pdf",
                         use_container_width=True,
                         key="download_report"
                     )
-                    st.success("✅ Report generated successfully!")
+                    st.success("Report generated successfully!")
                 else:
-                    st.error("❌ Failed to generate report. Please try again.")
+                    st.error("Failed to generate report. Please try again.")
     
     # ── Preview Stats ──────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### 📊 Report Preview")
+    st.markdown("### Report Preview")
     
     # Show quick stats for selected employee
     emp = get_employee(selected_emp_id)
@@ -403,11 +420,11 @@ def render_reports_tab(user: dict):
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("👤 Employee", emp.get("full_name", "—"))
+            st.metric("Employee", emp.get("full_name", "-"))
         with col2:
-            st.metric("📊 Attendance Rate", f"{att_rate}%")
+            st.metric("Attendance Rate", f"{att_rate}%")
         with col3:
-            st.metric("📦 Total Sales", len(emp_sales))
+            st.metric("Total Sales", len(emp_sales))
         with col4:
             total_breaks = len([b for b in breaks_data if b.get("duration")])
-            st.metric("☕ Total Breaks", total_breaks)
+            st.metric("Total Breaks", total_breaks)
