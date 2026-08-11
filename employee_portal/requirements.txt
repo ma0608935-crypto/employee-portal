@@ -10,3 +10,4 @@ google-auth>=2.0.0
 google-api-python-client>=2.0.0
 fpdf2>=2.7.4
 secure-smtplib>=0.1.1
+requests>=2.31.0
