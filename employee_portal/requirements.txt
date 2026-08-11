@@ -7,3 +7,4 @@ Pillow>=10.0.0
 psycopg2-binary>=2.9.0
 gspread>=6.0.0
 google-auth>=2.0.0
+fpdf>=1.7.2
