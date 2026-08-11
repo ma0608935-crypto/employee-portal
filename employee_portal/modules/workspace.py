@@ -80,10 +80,10 @@ def _render_topbar(user):
     role_color = {"admin": "#FF6B6B", "leader": "#FFD166", "employee": "#06D6A0"}
     color = role_color.get(user["role"], "#8B90A8")
     
-    # Theme toggle
+    # Theme toggle label
     theme_label = "🌙 Dark" if st.session_state.dark_mode else "☀️ Light"
     
-    c1, c2, c3, c4 = st.columns([1, 3, 1, 1])
+    c1, c2, c3, c4 = st.columns([1, 3.5, 0.8, 0.8])
     with c1:
         st.markdown(f"""
         <div style="display:flex;align-items:center;gap:10px;padding:0.6rem 0">
@@ -97,11 +97,14 @@ def _render_topbar(user):
         </div>
         """, unsafe_allow_html=True)
     with c2:
+        # Text color based on theme
+        text_color = "#8B90A8" if st.session_state.dark_mode else "#6B7280"
+        user_color = "#E8EAF0" if st.session_state.dark_mode else "#1A1D27"
         st.markdown(f"""
         <div style="display:flex;align-items:center;justify-content:center;
                     gap:8px;padding:0.65rem 0">
-            <span style="color:#8B90A8;font-size:0.82rem">Logged in as</span>
-            <span style="color:#E8EAF0;font-weight:600;font-size:0.9rem">
+            <span style="color:{text_color};font-size:0.82rem">Logged in as</span>
+            <span style="color:{user_color};font-weight:600;font-size:0.9rem">
                 {user.get('full_name','User')}
             </span>
             <span style="background:{color}22;color:{color};
@@ -110,17 +113,18 @@ def _render_topbar(user):
                          border:1px solid {color}44">
                 {user['role']}
             </span>
-            <span style="color:#8B90A8;font-size:0.8rem;margin-left:8px">
+            <span style="color:{text_color};font-size:0.8rem;margin-left:8px">
                 {datetime.now().strftime('%A, %d %B %Y  %H:%M')}
             </span>
         </div>
         """, unsafe_allow_html=True)
     with c3:
-        # Theme toggle button
-        if st.button(f"{theme_label}", key="theme_toggle", help="Toggle Dark/Light Mode"):
+        # Theme toggle button (secondary style for light mode)
+        btn_kind = "secondary" if not st.session_state.dark_mode else "primary"
+        if st.button(f"{theme_label}", key="theme_toggle", help="Toggle Dark/Light Mode", type=btn_kind):
             st.session_state.dark_mode = not st.session_state.dark_mode
             st.rerun()
     with c4:
         if st.button("⏻  Sign Out", key="logout_btn"):
             logout()
-    st.markdown('<hr style="border-color:#2E3350;margin:0 0 4px 0">', unsafe_allow_html=True)
+    st.markdown(f'<hr style="border-color:{ "#2E3350" if st.session_state.dark_mode else "#D0D5E0" };margin:0 0 4px 0">', unsafe_allow_html=True)
