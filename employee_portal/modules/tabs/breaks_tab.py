@@ -32,6 +32,25 @@ def _sync_excel():
     pd.DataFrame(records).to_excel(BREAK_FILE, index=False)
 
 
+def _convert_to_24h(hour, minute, am_pm):
+    """Convert 12-hour format to 24-hour format."""
+    hour_24 = hour
+    if am_pm == "PM" and hour != 12:
+        hour_24 = hour + 12
+    elif am_pm == "AM" and hour == 12:
+        hour_24 = 0
+    return f"{hour_24:02d}:{minute:02d}"
+
+
+def _convert_to_12h(time_str):
+    """Convert 24-hour format to 12-hour format for display."""
+    try:
+        time_obj = datetime.strptime(time_str, "%H:%M")
+        return time_obj.strftime("%I:%M %p").lstrip("0")
+    except:
+        return time_str
+
+
 def render_breaks_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
@@ -51,7 +70,7 @@ def render_breaks_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Admin: Edit break schedule (visible only to admin/leader) ────────────
+    # ── Admin: Edit break schedule ────────────────────────────────────────────
     if is_admin:
         with st.expander("⚙️ Edit Break Schedule", expanded=False):
             st.markdown("**Customize break times — changes apply immediately for everyone.**")
@@ -60,22 +79,41 @@ def render_breaks_tab(user: dict):
             for i, brk in enumerate(BREAKS):
                 with cols[i]:
                     st.markdown(f"**{brk['emoji']} {brk['name']}**")
-                    new_start = st.text_input("Start (HH:MM)", value=brk["start"],
-                                              key=f"brk_start_{i}")
-                    new_end = st.text_input("End   (HH:MM)", value=brk["end"],
-                                            key=f"brk_end_{i}")
+                    
+                    # Start time (12-hour format)
+                    col_h, col_m, col_ampm = st.columns(3)
+                    with col_h:
+                        start_h = st.number_input("Hour", min_value=1, max_value=12, value=int(brk["start"].split(":")[0]) if int(brk["start"].split(":")[0]) <= 12 else int(brk["start"].split(":")[0]) - 12, key=f"brk_start_h_{i}")
+                    with col_m:
+                        start_m = st.selectbox("Min", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"brk_start_m_{i}")
+                    with col_ampm:
+                        start_ampm = st.selectbox("AM/PM", ["AM", "PM"], key=f"brk_start_ampm_{i}")
+                    
+                    start_24 = _convert_to_24h(start_h, start_m, start_ampm)
+                    
+                    # End time (12-hour format)
+                    col_h2, col_m2, col_ampm2 = st.columns(3)
+                    with col_h2:
+                        end_h = st.number_input("Hour", min_value=1, max_value=12, value=int(brk["end"].split(":")[0]) if int(brk["end"].split(":")[0]) <= 12 else int(brk["end"].split(":")[0]) - 12, key=f"brk_end_h_{i}")
+                    with col_m2:
+                        end_m = st.selectbox("Min", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"brk_end_m_{i}")
+                    with col_ampm2:
+                        end_ampm = st.selectbox("AM/PM", ["AM", "PM"], key=f"brk_end_ampm_{i}")
+                    
+                    end_24 = _convert_to_24h(end_h, end_m, end_ampm)
+                    
                     new_schedule.append({
                         "name": brk["name"],
                         "emoji": brk["emoji"],
-                        "start": new_start,
-                        "end": new_end,
+                        "start": start_24,
+                        "end": end_24,
                     })
             if st.button("💾 Save Break Schedule", key="save_brk_schedule"):
                 st.session_state.break_schedule = new_schedule
                 st.success("Break schedule updated!")
                 st.rerun()
 
-    # ── Break cards (only for current user) ──────────────────────────────────
+    # ── Break cards ──────────────────────────────────────────────────────────
     st.markdown("### ☕ Break Schedule")
     cols = st.columns(3)
     for i, brk in enumerate(BREAKS):
@@ -91,7 +129,11 @@ def render_breaks_tab(user: dict):
             st.markdown(f'<div class="break-card {card_class}">', unsafe_allow_html=True)
             st.markdown(f'<div class="break-name">{brk["emoji"]} {brk["name"]}</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div class="break-time">🕐 {brk["start"]} – {brk["end"]}</div>',
+            
+            # Display in 12-hour format
+            start_display = _convert_to_12h(brk["start"])
+            end_display = _convert_to_12h(brk["end"])
+            st.markdown(f'<div class="break-time">🕐 {start_display} – {end_display}</div>',
                         unsafe_allow_html=True)
 
             if is_done:
@@ -99,7 +141,8 @@ def render_breaks_tab(user: dict):
                 st.markdown(f'<div style="color:#06D6A0;font-size:0.85rem">✅ Done ({dur:.0f} min)</div>',
                             unsafe_allow_html=True)
             elif open_rec:
-                st.markdown(f'<div style="color:#4F6BFF;font-size:0.82rem">🔴 In progress since {open_rec["start_time"]}</div>',
+                start_display = _convert_to_12h(open_rec["start_time"][:5])
+                st.markdown(f'<div style="color:#4F6BFF;font-size:0.82rem">🔴 In progress since {start_display}</div>',
                             unsafe_allow_html=True)
                 if st.button("⏹️ End Break", key=f"end_{i}"):
                     end_dt = datetime.now()
@@ -121,7 +164,7 @@ def render_breaks_tab(user: dict):
 
     st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
 
-    # ── Filters (only for current user) ──────────────────────────────────────
+    # ── Filters ──────────────────────────────────────────────────────────────
     all_breaks = get_breaks(user.get("employee_id"))
     
     c1, c2, c3 = st.columns([2, 2, 2])
@@ -143,7 +186,7 @@ def render_breaks_tab(user: dict):
                     if search.lower() in (b.get("full_name", "") or "").lower()
                     or search.lower() in (b.get("employee_id", "") or "").lower()]
 
-    # ── Metrics (only for current user) ──────────────────────────────────────
+    # ── Metrics ──────────────────────────────────────────────────────────────
     completed_brks = [b for b in all_breaks if b.get("duration")]
     total_min = sum(b["duration"] for b in completed_brks)
     avg_min = total_min / len(completed_brks) if completed_brks else 0
@@ -153,19 +196,26 @@ def render_breaks_tab(user: dict):
     with c1:
         st.metric("Total Breaks", len(completed_brks))
     with c2:
-        st.metric("Total Break Time", f"{int(total_min)} min")
+        st.metric("Total Time", f"{int(total_min)} min")
     with c3:
         st.metric("Avg Duration", f"{avg_min:.1f} min")
     with c4:
         st.metric("In Progress", in_prog)
 
-    # ── Table (only for current user) ────────────────────────────────────────
+    # ── Table ────────────────────────────────────────────────────────────────
     if filtered:
         df = pd.DataFrame(filtered)
         cols_show = [c for c in ["employee_id", "full_name", "break_name",
                                   "date", "start_time", "end_time", "duration"]
                      if c in df.columns]
         df_show = df[cols_show]
+        
+        # Convert times to 12-hour format for display
+        if "start_time" in df_show.columns:
+            df_show["start_time"] = df_show["start_time"].apply(lambda x: _convert_to_12h(x[:5]) if x else x)
+        if "end_time" in df_show.columns:
+            df_show["end_time"] = df_show["end_time"].apply(lambda x: _convert_to_12h(x[:5]) if x else x)
+        
         st.markdown("#### Your Break History")
         st.dataframe(df_show.reset_index(drop=True), use_container_width=True, height=320)
     else:
