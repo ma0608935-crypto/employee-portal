@@ -57,57 +57,40 @@ def render_callbacks_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     is_employee = user["role"] == "employee"
 
+    # ── Custom CSS ────────────────────────────────────────────────────────────
     st.markdown("""
     <style>
     .cb-card {
         background: #1A1D27;
         border: 1px solid #2E3350;
         border-radius: 12px;
-        padding: 0.9rem 1.2rem;
+        padding: 0.8rem 1rem;
         margin-bottom: 0.6rem;
-        max-width: 450px;
-        display: inline-block;
-        width: 100%;
-    }
-    .cb-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
     }
     .cb-name {
         font-weight: 600;
         color: #E8EAF0;
-        font-size: 1rem;
+        font-size: 0.95rem;
     }
     .cb-detail {
         color: #8B90A8;
-        font-size: 0.85rem;
-        margin-top: 2px;
+        font-size: 0.82rem;
+        margin-top: 1px;
     }
     .status-pill {
         display: inline-block;
-        padding: 3px 14px;
+        padding: 2px 14px;
         border-radius: 20px;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 600;
         text-align: center;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-        user-select: none;
-        min-width: 60px;
-        text-align: center;
     }
-    .status-pill:hover {
-        transform: scale(1.05);
-        opacity: 0.85;
-    }
-    .status-pill.cold { background: #4F6BFF22; color: #4F6BFF; border-color: #4F6BFF55; }
-    .status-pill.warm { background: #FF9F4322; color: #FF9F43; border-color: #FF9F4355; }
-    .status-pill.hot  { background: #FF6B6B22; color: #FF6B6B; border-color: #FF6B6B55; }
-    .status-pill.pending { background: #FFD16622; color: #FFD166; border-color: #FFD16655; }
-    .status-pill.completed { background: #06D6A022; color: #06D6A0; border-color: #06D6A055; }
-    .status-pill.cancelled { background: #FF6B6B22; color: #FF6B6B; border-color: #FF6B6B55; }
+    .status-cold { background: #4F6BFF22; color: #4F6BFF; border: 1px solid #4F6BFF55; }
+    .status-warm { background: #FF9F4322; color: #FF9F43; border: 1px solid #FF9F4355; }
+    .status-hot  { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
+    .status-pending { background: #FFD16622; color: #FFD166; border: 1px solid #FFD16655; }
+    .status-completed { background: #06D6A022; color: #06D6A0; border: 1px solid #06D6A055; }
+    .status-cancelled { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
     .cb-actions {
         display: flex;
         gap: 6px;
@@ -115,26 +98,17 @@ def render_callbacks_tab(user: dict):
         margin-top: 6px;
         flex-wrap: wrap;
     }
-    .cb-actions select {
-        background: #1A1D27;
-        color: #E8EAF0;
-        border: 1px solid #2E3350;
+    .cb-actions button {
+        border: none;
         border-radius: 6px;
-        padding: 4px 8px;
-        font-size: 0.72rem;
+        padding: 3px 12px;
+        font-size: 0.7rem;
         cursor: pointer;
-        display: none;
+        font-weight: 500;
     }
     .btn-update {
         background: #4F6BFF;
         color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 4px 12px;
-        font-size: 0.72rem;
-        cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s;
     }
     .btn-update:hover {
         background: #3B55E6;
@@ -142,21 +116,9 @@ def render_callbacks_tab(user: dict):
     .btn-delete {
         background: #FF6B6B;
         color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 4px 12px;
-        font-size: 0.72rem;
-        cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s;
     }
     .btn-delete:hover {
         background: #E65555;
-    }
-    .readonly-text {
-        color: #8B90A8;
-        font-size: 0.72rem;
-        margin-top: 4px;
     }
     .cb-notes {
         color: #8B90A8;
@@ -166,37 +128,10 @@ def render_callbacks_tab(user: dict):
         border-top: 1px solid #2E3350;
         padding-top: 4px;
     }
-    .cb-status-select {
-        background: #1A1D27;
-        color: #E8EAF0;
-        border: 1px solid #2E3350;
-        border-radius: 6px;
-        padding: 3px 8px;
-        font-size: 0.72rem;
-        cursor: pointer;
-    }
-    .cb-status-select:focus {
-        outline: none;
-        border-color: #4F6BFF;
-    }
-    .status-wrapper {
+    .cb-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 6px;
-    }
-    .status-wrapper select {
-        background: #1A1D27;
-        color: #E8EAF0;
-        border: 1px solid #2E3350;
-        border-radius: 6px;
-        padding: 3px 6px;
-        font-size: 0.72rem;
-        cursor: pointer;
-        width: 80px;
-    }
-    .status-wrapper select:focus {
-        outline: none;
-        border-color: #4F6BFF;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -245,7 +180,7 @@ def render_callbacks_tab(user: dict):
         rate = round(completed_count / total * 100) if total else 0
         st.metric("✅ Rate", f"{rate}%")
 
-    # ── Chart (small) ────────────────────────────────────────────────────────
+    # ── Chart ─────────────────────────────────────────────────────────────────
     try:
         import plotly.express as px
         
@@ -373,7 +308,7 @@ def render_callbacks_tab(user: dict):
     # ── Records ──────────────────────────────────────────────────────────────
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
-    # Display in grid (2 columns)
+    # Display in 2 columns
     cols = st.columns(2)
     
     for idx, cb in enumerate(filtered):
@@ -395,75 +330,70 @@ def render_callbacks_tab(user: dict):
                     address_text = address_parts[0].strip() if address_parts else ""
                     notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
             
-            # Get status class for CSS
-            status_class = cb["status"].lower()
-            
-            # Get emoji
+            # Get status class
+            status_class = f"status-{cb['status'].lower()}"
             emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
             
-            # Card HTML
-            card_html = f"""
-            <div class="cb-card">
-                <div class="cb-header">
-                    <div class="cb-name">👤 {cb.get('customer_name', '—')}</div>
-            """
-            
-            # Status with dropdown for employees
-            if is_employee:
-                all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
-                current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
+            # ── Card using st.container ──────────────────────────────────────
+            with st.container():
+                st.markdown('<div class="cb-card">', unsafe_allow_html=True)
                 
-                card_html += f"""
-                    <div class="status-wrapper">
-                        <select class="cb-status-select" onchange="this.style.borderColor='#4F6BFF'">
-                            {''.join(f'<option value="{s}" {"selected" if s == cb["status"] else ""}>{s}</option>' for s in all_statuses_list)}
-                        </select>
-                        <span class="status-pill {status_class}">{emoji} {cb['status']}</span>
-                    </div>
-                """
-            else:
-                card_html += f"""
-                    <span class="status-pill {status_class}">{emoji} {cb['status']}</span>
-                """
-            
-            card_html += f"""
-                </div>
-                <div class="cb-detail">📱 {cb.get('phone', '—')}</div>
-            """
-            
-            if address_text:
-                card_html += f'<div class="cb-detail">📍 {address_text}</div>'
-            
-            card_html += f"""
-                <div class="cb-detail">📅 {cb.get('callback_date', '—')} &nbsp; ⏰ {cb.get('callback_time', '—')}</div>
-            """
-            
-            if notes_text and notes_text.strip():
-                card_html += f'<div class="cb-notes">📝 {notes_text}</div>'
-            
-            # Actions
-            if is_employee:
-                card_html += f"""
-                <div class="cb-actions">
-                    <button class="btn-update" onclick="updateStatus({cb['id']})">💾 Update</button>
-                    <button class="btn-delete" onclick="deleteCallback({cb['id']})">🗑️ Delete</button>
-                </div>
-                """
-            else:
-                card_html += f"""
-                <div class="cb-actions">
-                    <span class="readonly-text">🔒 Read-only</span>
-                </div>
-                """
-            
-            card_html += "</div>"
-            
-            st.markdown(card_html, unsafe_allow_html=True)
+                # Header: Name + Status
+                col_name, col_status = st.columns([2, 1])
+                with col_name:
+                    st.markdown(f'<div class="cb-name">👤 {cb.get("customer_name", "—")}</div>', unsafe_allow_html=True)
+                with col_status:
+                    if is_employee:
+                        all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
+                        current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
+                        
+                        new_status = st.selectbox(
+                            "",
+                            all_statuses_list,
+                            index=current_idx,
+                            key=f"stat_{cb['id']}",
+                            label_visibility="collapsed"
+                        )
+                        st.markdown(f'<span class="status-pill {status_class}">{emoji} {cb["status"]}</span>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<span class="status-pill {status_class}">{emoji} {cb["status"]}</span>', unsafe_allow_html=True)
+                
+                # Phone
+                st.markdown(f'<div class="cb-detail">📱 {cb.get("phone", "—")}</div>', unsafe_allow_html=True)
+                
+                # Address
+                if address_text:
+                    st.markdown(f'<div class="cb-detail">📍 {address_text}</div>', unsafe_allow_html=True)
+                
+                # Date & Time
+                st.markdown(f'<div class="cb-detail">📅 {cb.get("callback_date", "—")} &nbsp; ⏰ {cb.get("callback_time", "—")}</div>', unsafe_allow_html=True)
+                
+                # Notes
+                if notes_text and notes_text.strip():
+                    st.markdown(f'<div class="cb-notes">📝 {notes_text}</div>', unsafe_allow_html=True)
+                
+                # Actions
+                if is_employee:
+                    col_upd, col_del = st.columns(2)
+                    with col_upd:
+                        if st.button("💾 Update", key=f"upd_{cb['id']}", use_container_width=True):
+                            update_callback(cb["id"], status=new_status if is_employee else cb["status"])
+                            _sync_excel()
+                            st.rerun()
+                    with col_del:
+                        if st.button("🗑️ Delete", key=f"del_{cb['id']}", use_container_width=True):
+                            delete_callback(cb["id"])
+                            _sync_excel()
+                            st.rerun()
+                else:
+                    st.markdown('<div style="color:#8B90A8;font-size:0.7rem;margin-top:4px;">🔒 Read-only</div>', unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
 
     if not filtered:
         st.info("No callbacks match the current filters.")
 
-    # ── Export (admin only) ───────────────────────────────────────────────────
+    # ── Export ────────────────────────────────────────────────────────────────
     if filtered and is_admin:
         df = pd.DataFrame(filtered)
         c1, c2 = st.columns(2)
