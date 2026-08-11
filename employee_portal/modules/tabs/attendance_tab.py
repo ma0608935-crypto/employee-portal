@@ -16,8 +16,9 @@ ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
 EXPECTED_HOUR = 17
 EXPECTED_MINUTE = 0
 
-# المنطقة الزمنية الافتراضية (مصر)
-DEFAULT_TIMEZONE = "+2"
+# المنطقة الزمنية الافتراضية (مصر: UTC+2)
+DEFAULT_TZ_HOURS = 2
+DEFAULT_TZ_MINUTES = 0
 
 
 def _sync_excel(records):
@@ -36,18 +37,20 @@ def _is_late(check_hour, check_minute):
 
 def _get_local_time():
     """
-    Get local time based on system timezone setting.
+    Get local time based on system timezone setting (hours + minutes).
     """
     # Check if timezone is set in session
-    if "system_tz_offset" in st.session_state:
-        offset_hours = st.session_state.system_tz_offset
+    if "system_tz_hours" in st.session_state and "system_tz_minutes" in st.session_state:
+        offset_hours = st.session_state.system_tz_hours
+        offset_minutes = st.session_state.system_tz_minutes
+        total_minutes = offset_hours * 60 + offset_minutes
         utc_now = datetime.utcnow()
-        local_now = utc_now + timedelta(hours=offset_hours)
+        local_now = utc_now + timedelta(minutes=total_minutes)
         return local_now
     
     # Fallback to default
     utc_now = datetime.utcnow()
-    local_now = utc_now + timedelta(hours=int(DEFAULT_TIMEZONE))
+    local_now = utc_now + timedelta(hours=DEFAULT_TZ_HOURS, minutes=DEFAULT_TZ_MINUTES)
     return local_now
 
 
@@ -55,48 +58,62 @@ def render_attendance_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
     
+    # ── Initialize timezone in session if not exists ────────────────────────
+    if "system_tz_hours" not in st.session_state:
+        st.session_state.system_tz_hours = DEFAULT_TZ_HOURS
+    if "system_tz_minutes" not in st.session_state:
+        st.session_state.system_tz_minutes = DEFAULT_TZ_MINUTES
+    
     # ── Timezone Settings (Admin/Leader Only) ───────────────────────────────
     if is_admin:
-        with st.expander("🌍 System Timezone Settings (Admin Only)", expanded=False):
+        with st.expander("🌍 System Timezone Settings (Admin Only)", expanded=True):
             st.markdown("""
             <div style="background:#1A1D27;border:1px solid #2E3350;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
                 <p style="color:#8B90A8;font-size:0.85rem;">
                     <strong>⚠️ Admin Only:</strong> Set the system timezone for all users.
-                    <br>Example: Egypt = +2, Saudi = +3, UAE = +4
+                    <br>Examples: Egypt = +2:00, India = +5:30, Nepal = +5:45
                 </p>
             </div>
             """, unsafe_allow_html=True)
             
-            # Timezone offset options
-            tz_options = {
-                "-12": -12, "-11": -11, "-10": -10, "-9": -9, "-8": -8, "-7": -7,
-                "-6": -6, "-5": -5, "-4": -4, "-3": -3, "-2": -2, "-1": -1,
-                "0 (UTC)": 0,
-                "+1": 1, "+2": 2, "+3": 3, "+4": 4, "+5": 5, "+6": 6,
-                "+7": 7, "+8": 8, "+9": 9, "+10": 10, "+11": 11, "+12": 12
-            }
+            # Get current values from session
+            current_hours = st.session_state.system_tz_hours
+            current_minutes = st.session_state.system_tz_minutes
             
-            # Get current system timezone
-            current_tz = st.session_state.get("system_tz_offset", int(DEFAULT_TIMEZONE))
-            current_tz_label = f"+{current_tz}" if current_tz >= 0 else str(current_tz)
-            
-            col1, col2 = st.columns([2, 1])
+            col1, col2, col3 = st.columns([2, 1, 1])
             with col1:
-                selected_tz = st.selectbox(
-                    "Select system timezone (UTC offset)",
-                    list(tz_options.keys()),
-                    index=list(tz_options.keys()).index(current_tz_label) if current_tz_label in tz_options else 0,
-                    key="tz_select"
+                new_tz_hours = st.number_input(
+                    "UTC Offset (Hours)",
+                    min_value=-12,
+                    max_value=14,
+                    value=current_hours,
+                    step=1,
+                    key="tz_hours_input"
                 )
             with col2:
+                new_tz_minutes = st.selectbox(
+                    "Minutes",
+                    [0, 15, 30, 45],
+                    index=[0, 15, 30, 45].index(current_minutes) if current_minutes in [0, 15, 30, 45] else 0,
+                    key="tz_minutes_input"
+                )
+            with col3:
                 if st.button("✅ Apply to All Users", key="apply_tz_btn"):
-                    st.session_state.system_tz_offset = tz_options[selected_tz]
-                    st.success(f"✅ System timezone set to UTC{selected_tz} for all users!")
+                    # Save to session state
+                    st.session_state.system_tz_hours = new_tz_hours
+                    st.session_state.system_tz_minutes = new_tz_minutes
+                    
+                    total_minutes = new_tz_hours * 60 + new_tz_minutes
+                    hours_display = total_minutes // 60
+                    mins_display = abs(total_minutes % 60)
+                    sign = "+" if total_minutes >= 0 else ""
+                    
+                    st.success(f"✅ System timezone set to UTC{sign}{hours_display}:{mins_display:02d} for all users!")
                     st.rerun()
             
             # Show current system time
             local_now = _get_local_time()
-            server_now = datetime.now()
+            server_now = datetime.utcnow()
             
             col_a, col_b = st.columns(2)
             with col_a:
@@ -104,14 +121,23 @@ def render_attendance_tab(user: dict):
             with col_b:
                 st.metric("🖥️ Server Time (UTC)", server_now.strftime("%I:%M:%S %p"))
             
-            st.info(f"✅ Current system timezone: UTC{st.session_state.get('system_tz_offset', int(DEFAULT_TIMEZONE)):+.0f}")
+            total_minutes = current_hours * 60 + current_minutes
+            hours_display = total_minutes // 60
+            mins_display = abs(total_minutes % 60)
+            sign = "+" if total_minutes >= 0 else ""
+            st.info(f"✅ Current system timezone: UTC{sign}{hours_display}:{mins_display:02d}")
 
     # ── Show current time for all users ──────────────────────────────────────
     else:
         # Regular employees see a small indicator
         local_now = _get_local_time()
-        tz_offset = st.session_state.get("system_tz_offset", int(DEFAULT_TIMEZONE))
-        st.caption(f"🕐 System time: {local_now.strftime('%I:%M:%S %p')} (UTC{tz_offset:+.0f})")
+        tz_hours = st.session_state.system_tz_hours
+        tz_minutes = st.session_state.system_tz_minutes
+        total_minutes = tz_hours * 60 + tz_minutes
+        hours_display = total_minutes // 60
+        mins_display = abs(total_minutes % 60)
+        sign = "+" if total_minutes >= 0 else ""
+        st.caption(f"🕐 System time: {local_now.strftime('%I:%M:%S %p')} (UTC{sign}{hours_display}:{mins_display:02d})")
 
     st.markdown("---")
     
