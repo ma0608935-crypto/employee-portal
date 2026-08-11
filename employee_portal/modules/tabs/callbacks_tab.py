@@ -167,7 +167,7 @@ def render_callbacks_tab(user: dict):
         rate = round(completed_count / total * 100) if total else 0
         st.metric("✅ Rate", f"{rate}%")
 
-    # ── Chart ─────────────────────────────────────────────────────────────────
+    # ── Chart (صغير) ──────────────────────────────────────────────────────────
     try:
         import plotly.express as px
         
@@ -205,14 +205,19 @@ def render_callbacks_tab(user: dict):
                 showlegend=False,
                 margin=dict(l=10, r=10, t=35, b=10),
                 title_font_size=12,
-                height=250,
+                height=200,
+                width=400,
             )
             fig.update_traces(
                 texttemplate='%{y}',
                 textposition='outside',
-                textfont_size=11
+                textfont_size=10
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # عرض الشارت في نص الصفحة
+            col_chart, col_empty = st.columns([1, 1])
+            with col_chart:
+                st.plotly_chart(fig, use_container_width=False)
     except ImportError:
         pass
 
