@@ -55,14 +55,28 @@ def upload_to_drive_apps_script(file_path, web_app_url, folder_id=None):
 
 def backup_to_drive_apps_script():
     """Create backup and upload to Google Drive using Apps Script."""
-    from modules.backup_utils import create_backup, get_backup_list
+    try:
+        from modules.backup_utils import create_backup, get_backup_list
+    except ImportError:
+        # Fallback import
+        import sys
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        from backup_utils import create_backup, get_backup_list
     
     # Check configuration
-    web_app_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+    try:
+        web_app_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+    except:
+        web_app_url = None
+    
     if not web_app_url:
         return False, "Google Apps Script URL not configured in secrets.toml"
     
-    folder_id = st.secrets.get("drive_apps_script", {}).get("folder_id", None)
+    folder_id = None
+    try:
+        folder_id = st.secrets.get("drive_apps_script", {}).get("folder_id", None)
+    except:
+        pass
     
     # Create backup
     success, msg, link = create_backup(upload_to_drive_flag=False)
