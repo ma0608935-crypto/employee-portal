@@ -1,6 +1,6 @@
 """
 modules/tabs/breaks_tab.py
-Break management — editable break schedule, Google Sheets sync, history.
+Break management — only for current user (admin/leader see only their own)
 """
 
 import streamlit as st
@@ -9,7 +9,7 @@ import os
 from datetime import date, datetime, timedelta
 from modules.database import start_break, end_break, get_open_break, get_breaks
 
-DATA_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 BREAK_FILE = os.path.join(DATA_DIR, "breaks.xlsx")
 
 # Default break schedule stored in session state
@@ -32,32 +32,6 @@ def _sync_excel():
     pd.DataFrame(records).to_excel(BREAK_FILE, index=False)
 
 
-def _push_to_sheets(df: pd.DataFrame):
-    """Push break records to Google Sheets via URL (append rows)."""
-    url = st.session_state.get("breaks_sheet_url", "")
-    if not url:
-        return False, "No Google Sheets URL configured."
-    try:
-        import gspread
-        from google.oauth2.service_account import Credentials
-        import json, streamlit as st2
-        creds_dict = st2.secrets.get("gcp_service_account", {})
-        if not creds_dict:
-            return False, "No GCP service account in secrets."
-        creds = Credentials.from_service_account_info(
-            dict(creds_dict),
-            scopes=["https://spreadsheets.google.com/feeds",
-                    "https://www.googleapis.com/auth/drive"])
-        gc = gspread.authorize(creds)
-        sh = gc.open_by_url(url)
-        ws = sh.sheet1
-        ws.clear()
-        ws.update([df.columns.tolist()] + df.values.tolist())
-        return True, "Synced to Google Sheets!"
-    except Exception as e:
-        return False, str(e)
-
-
 def render_breaks_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
@@ -77,7 +51,7 @@ def render_breaks_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Admin: Edit break schedule ────────────────────────────────────────────
+    # ── Admin: Edit break schedule (visible only to admin/leader) ────────────
     if is_admin:
         with st.expander("⚙️ Edit Break Schedule", expanded=False):
             st.markdown("**Customize break times — changes apply immediately for everyone.**")
@@ -88,47 +62,25 @@ def render_breaks_tab(user: dict):
                     st.markdown(f"**{brk['emoji']} {brk['name']}**")
                     new_start = st.text_input("Start (HH:MM)", value=brk["start"],
                                               key=f"brk_start_{i}")
-                    new_end   = st.text_input("End   (HH:MM)", value=brk["end"],
-                                              key=f"brk_end_{i}")
+                    new_end = st.text_input("End   (HH:MM)", value=brk["end"],
+                                            key=f"brk_end_{i}")
                     new_schedule.append({
-                        "name":  brk["name"],
+                        "name": brk["name"],
                         "emoji": brk["emoji"],
                         "start": new_start,
-                        "end":   new_end,
+                        "end": new_end,
                     })
             if st.button("💾 Save Break Schedule", key="save_brk_schedule"):
                 st.session_state.break_schedule = new_schedule
                 st.success("Break schedule updated!")
                 st.rerun()
 
-    # ── Google Sheets config ──────────────────────────────────────────────────
-    if is_admin:
-        with st.expander("🔗 Google Sheets Integration", expanded=False):
-            sheet_url = st.text_input(
-                "Google Sheets URL",
-                value=st.session_state.get("breaks_sheet_url", ""),
-                placeholder="https://docs.google.com/spreadsheets/d/...",
-                key="breaks_sheet_input"
-            )
-            st.caption("Share the sheet with your service account email as Editor first.")
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("💾 Save URL", key="save_brk_url"):
-                    st.session_state.breaks_sheet_url = sheet_url
-                    st.success("URL saved!")
-            with c2:
-                if st.button("🔄 Sync Now", key="sync_brk_sheets"):
-                    records = get_breaks()
-                    df = pd.DataFrame(records)
-                    ok, msg = _push_to_sheets(df)
-                    st.success(msg) if ok else st.error(msg)
-
-    # ── Break cards ───────────────────────────────────────────────────────────
+    # ── Break cards (only for current user) ──────────────────────────────────
     st.markdown("### ☕ Break Schedule")
     cols = st.columns(3)
     for i, brk in enumerate(BREAKS):
         with cols[i]:
-            open_rec     = get_open_break(user.get("employee_id"), brk["name"], today_str)
+            open_rec = get_open_break(user.get("employee_id"), brk["name"], today_str)
             today_breaks = [b for b in get_breaks(user.get("employee_id"))
                             if b["date"] == today_str
                             and b["break_name"] == brk["name"]
@@ -150,7 +102,7 @@ def render_breaks_tab(user: dict):
                 st.markdown(f'<div style="color:#4F6BFF;font-size:0.82rem">🔴 In progress since {open_rec["start_time"]}</div>',
                             unsafe_allow_html=True)
                 if st.button("⏹️ End Break", key=f"end_{i}"):
-                    end_dt   = datetime.now()
+                    end_dt = datetime.now()
                     start_dt = datetime.strptime(
                         f"{today_str} {open_rec['start_time']}", "%Y-%m-%d %H:%M:%S")
                     duration = (end_dt - start_dt).seconds / 60
@@ -169,8 +121,9 @@ def render_breaks_tab(user: dict):
 
     st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
 
-    # ── Filters ───────────────────────────────────────────────────────────────
-    all_breaks = get_breaks(None if is_admin else user.get("employee_id"))
+    # ── Filters (only for current user) ──────────────────────────────────────
+    all_breaks = get_breaks(user.get("employee_id"))
+    
     c1, c2, c3 = st.columns([2, 2, 2])
     with c1:
         date_filter = st.date_input("Filter by Date", value=None, key="brk_date")
@@ -178,7 +131,7 @@ def render_breaks_tab(user: dict):
         brk_names = ["All"] + [b["name"] for b in BREAKS]
         brk_type_filter = st.selectbox("Break Type", brk_names, key="brk_type")
     with c3:
-        search = st.text_input("🔍 Search Employee", key="brk_search")
+        search = st.text_input("🔍 Search", key="brk_search")
 
     filtered = all_breaks[:]
     if date_filter:
@@ -187,40 +140,33 @@ def render_breaks_tab(user: dict):
         filtered = [b for b in filtered if b.get("break_name") == brk_type_filter]
     if search:
         filtered = [b for b in filtered
-                    if search.lower() in (b.get("full_name","") or "").lower()
-                    or search.lower() in (b.get("employee_id","") or "").lower()]
+                    if search.lower() in (b.get("full_name", "") or "").lower()
+                    or search.lower() in (b.get("employee_id", "") or "").lower()]
 
-    # ── Metrics ───────────────────────────────────────────────────────────────
+    # ── Metrics (only for current user) ──────────────────────────────────────
     completed_brks = [b for b in all_breaks if b.get("duration")]
     total_min = sum(b["duration"] for b in completed_brks)
-    avg_min   = total_min / len(completed_brks) if completed_brks else 0
-    in_prog   = sum(1 for b in all_breaks if not b.get("end_time"))
+    avg_min = total_min / len(completed_brks) if completed_brks else 0
+    in_prog = sum(1 for b in all_breaks if not b.get("end_time"))
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("Total Breaks",     len(completed_brks))
-    with c2: st.metric("Total Break Time", f"{int(total_min)} min")
-    with c3: st.metric("Avg Duration",     f"{avg_min:.1f} min")
-    with c4: st.metric("In Progress",      in_prog)
+    with c1:
+        st.metric("Total Breaks", len(completed_brks))
+    with c2:
+        st.metric("Total Break Time", f"{int(total_min)} min")
+    with c3:
+        st.metric("Avg Duration", f"{avg_min:.1f} min")
+    with c4:
+        st.metric("In Progress", in_prog)
 
-    # ── Table + export (admin only) ───────────────────────────────────────────
+    # ── Table (only for current user) ────────────────────────────────────────
     if filtered:
         df = pd.DataFrame(filtered)
-        cols_show = [c for c in ["employee_id","full_name","break_name",
-                                  "date","start_time","end_time","duration"]
+        cols_show = [c for c in ["employee_id", "full_name", "break_name",
+                                  "date", "start_time", "end_time", "duration"]
                      if c in df.columns]
         df_show = df[cols_show]
-        st.markdown("#### Break History")
+        st.markdown("#### Your Break History")
         st.dataframe(df_show.reset_index(drop=True), use_container_width=True, height=320)
-
-        if is_admin:
-            c1, c2 = st.columns(2)
-            with c1:
-                st.download_button("⬇️ Download CSV",
-                                   df_show.to_csv(index=False).encode(),
-                                   "breaks.csv", "text/csv")
-            with c2:
-                if st.button("📤 Push to Google Sheets", key="push_brk"):
-                    ok, msg = _push_to_sheets(df_show)
-                    st.success(msg) if ok else st.error(msg)
     else:
         st.info("No break records found for the selected filters.")
