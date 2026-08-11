@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import date, datetime, timedelta
+import pytz
 from modules.database import record_attendance, get_attendance, get_all_users
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
@@ -15,6 +16,28 @@ ATT_FILE = os.path.join(DATA_DIR, "attendance.xlsx")
 # ✅ وقت الحضور المتوقع (5:00 PM)
 EXPECTED_HOUR = 17
 EXPECTED_MINUTE = 0
+
+# ✅ المنطقة الزمنية لمصر (أو حسب موقعك)
+# استخدمي المنطقة الزمنية بتاعتك:
+# - مصر: "Africa/Cairo"
+# - السعودية: "Asia/Riyadh"
+# - الإمارات: "Asia/Dubai"
+# - الولايات المتحدة (نيويورك): "America/New_York"
+TIMEZONE = "Africa/Cairo"
+
+
+def _get_local_time():
+    """Get current local time based on user's timezone."""
+    try:
+        # Get timezone from session state (if set by user)
+        if "user_timezone" in st.session_state:
+            tz = pytz.timezone(st.session_state.user_timezone)
+        else:
+            tz = pytz.timezone(TIMEZONE)
+        return datetime.now(tz)
+    except:
+        # Fallback to system time
+        return datetime.now()
 
 
 def _sync_excel(records):
@@ -34,6 +57,7 @@ def _is_late(check_hour, check_minute):
 def render_attendance_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     today_str = date.today().isoformat()
+    local_now = _get_local_time()
 
     st.markdown("""
     <style>
@@ -78,8 +102,57 @@ def render_attendance_tab(user: dict):
         background: #FFD16622;
         border: 1px solid #FFD16655;
     }
+    .timezone-select {
+        margin-bottom: 1rem;
+        padding: 0.5rem;
+        background: #1A1D27;
+        border: 1px solid #2E3350;
+        border-radius: 8px;
+    }
     </style>
     """, unsafe_allow_html=True)
+
+    # ── Timezone Selector ─────────────────────────────────────────────────────
+    with st.expander("🌍 Timezone Settings", expanded=False):
+        timezones = [
+            "Africa/Cairo",
+            "Asia/Riyadh",
+            "Asia/Dubai",
+            "Asia/Kuwait",
+            "Asia/Bahrain",
+            "Asia/Qatar",
+            "Asia/Amman",
+            "Asia/Beirut",
+            "Asia/Damascus",
+            "Asia/Jerusalem",
+            "America/New_York",
+            "America/Los_Angeles",
+            "America/Chicago",
+            "Europe/London",
+            "Europe/Paris",
+            "Europe/Berlin",
+            "Asia/Kolkata",
+            "Asia/Shanghai",
+            "Asia/Tokyo",
+            "Australia/Sydney",
+        ]
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            selected_tz = st.selectbox(
+                "Select your timezone",
+                timezones,
+                index=timezones.index(TIMEZONE) if TIMEZONE in timezones else 0,
+                key="tz_selector"
+            )
+        with col2:
+            if st.button("✅ Apply Timezone", key="apply_tz"):
+                st.session_state.user_timezone = selected_tz
+                st.success(f"Timezone set to {selected_tz}")
+                st.rerun()
+        
+        current_local = _get_local_time()
+        st.caption(f"🕐 Current local time: {current_local.strftime('%I:%M:%S %p')}")
 
     # ── Admin/Leader: Can set check-in time for any employee ────────────────
     if is_admin:
@@ -110,7 +183,7 @@ def render_attendance_tab(user: dict):
                 with col4:
                     check_minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key="att_admin_min")
                 
-                am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key="att_admin_ampm")  # Default PM
+                am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key="att_admin_ampm")
                 
                 # Status selection
                 status_opt = st.selectbox("Status", ["Present", "Late", "Absent"], key="att_admin_status")
@@ -262,6 +335,8 @@ def _employee_checkin_block(user, today_str, is_admin=False):
             key=f"checkin_disabled_{user['id']}"
         )
     else:
+        local_now = _get_local_time()
+        
         if is_admin:
             # Admin/Leader: can pick time
             st.info("You are an admin. You can set a custom check-in time.")
@@ -272,7 +347,7 @@ def _employee_checkin_block(user, today_str, is_admin=False):
             with col2:
                 check_minute = st.selectbox("Minute", [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55], index=0, key=f"emp_min_{user['id']}")
             
-            am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"emp_ampm_{user['id']}")  # Default PM
+            am_pm = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"emp_ampm_{user['id']}")
             status_opt = st.selectbox("Status", ["Present", "Late"], key=f"emp_status_{user['id']}")
             
             if st.button("📍 Check In", key=f"checkin_admin_{user['id']}", use_container_width=True):
@@ -303,19 +378,18 @@ def _employee_checkin_block(user, today_str, is_admin=False):
                 else:
                     st.warning(msg)
         else:
-            # Employee: auto check-in
-            now = datetime.now()
-            is_late = _is_late(now.hour, now.minute)
+            # Employee: auto check-in using local time
+            is_late = _is_late(local_now.hour, local_now.minute)
             
             if is_late:
-                st.warning(f"⏰ Late! Current time: {now.strftime('%I:%M %p')} (Expected before 5:00 PM)")
+                st.warning(f"⏰ Late! Current time: {local_now.strftime('%I:%M %p')} (Expected before 5:00 PM)")
             else:
-                st.success(f"✅ On time! Current time: {now.strftime('%I:%M %p')}")
+                st.success(f"✅ On time! Current time: {local_now.strftime('%I:%M %p')}")
             
             if st.button("📍 Check In Now", key=f"checkin_{user['id']}", use_container_width=True):
-                now = datetime.now()
-                time_str = now.strftime("%H:%M:%S")
-                status = "Late" if _is_late(now.hour, now.minute) else "Present"
+                local_now = _get_local_time()
+                time_str = local_now.strftime("%H:%M:%S")
+                status = "Late" if _is_late(local_now.hour, local_now.minute) else "Present"
                 
                 ok, msg = record_attendance(
                     user.get("employee_id"),
@@ -325,7 +399,7 @@ def _employee_checkin_block(user, today_str, is_admin=False):
                     status
                 )
                 if ok:
-                    st.success(f"✅ Checked in at {now.strftime('%I:%M %p')}")
+                    st.success(f"✅ Checked in at {local_now.strftime('%I:%M %p')}")
                     _sync_excel(get_attendance())
                     st.rerun()
                 else:
