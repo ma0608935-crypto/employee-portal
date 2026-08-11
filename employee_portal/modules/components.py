@@ -73,76 +73,69 @@ def profile_card(user: dict):
     .avatar-wrapper {
         position: relative;
         display: inline-block;
-        width: 130px;
-        height: 130px;
+        width: 170px;
+        height: 170px;
     }
     .avatar-wrapper img {
-        width: 130px;
-        height: 130px;
+        width: 170px;
+        height: 170px;
         border-radius: 50%;
         object-fit: cover;
         border: 3px solid #2E3350;
     }
     .avatar-wrapper .avatar-initials {
-        width: 130px;
-        height: 130px;
+        width: 170px;
+        height: 170px;
         border-radius: 50%;
         background: linear-gradient(135deg, #4F6BFF, #7C3AED);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 3rem;
+        font-size: 4rem;
         font-weight: 700;
         color: white;
         border: 3px solid #2E3350;
     }
-    .avatar-edit-btn {
-        margin-top: 6px;
-        background: transparent;
-        color: #8B90A8;
-        border: 1px solid #2E3350;
-        border-radius: 8px;
-        padding: 2px 12px;
-        font-size: 0.7rem;
+    
+    /* ===== Pencil Icon (small, on the avatar) ===== */
+    .avatar-edit-icon {
+        position: absolute;
+        bottom: 4px;
+        right: 4px;
+        background: #4F6BFF;
+        border: 2px solid #1A1D27;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        color: white;
         cursor: pointer;
         transition: all 0.2s;
-        width: 100%;
-        text-align: center;
+        box-shadow: 0 2px 8px rgba(79,107,255,0.4);
+        z-index: 10;
     }
-    .avatar-edit-btn:hover {
-        background: #2E3350;
-        color: #E8EAF0;
+    .avatar-edit-icon:hover {
+        transform: scale(1.1);
+        background: #3B55E6;
     }
     
     /* Upload area */
     .upload-area {
-        margin-top: 6px;
-        padding: 8px 10px;
+        margin-top: 8px;
+        padding: 10px 12px;
         background: #0F1117;
         border: 1px solid #2E3350;
-        border-radius: 8px;
+        border-radius: 10px;
         width: 100%;
     }
     .upload-area p {
         color: #8B90A8;
-        font-size: 0.7rem;
-        margin: 0 0 4px 0;
+        font-size: 0.75rem;
+        margin: 0 0 6px 0;
         text-align: center;
-    }
-    .upload-area .remove-btn {
-        background: transparent;
-        color: #FF6B6B;
-        border: 1px solid #FF6B6B44;
-        border-radius: 6px;
-        padding: 2px 10px;
-        font-size: 0.7rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        margin-top: 4px;
-        width: 100%;
-    }
-    .upload-area .remove-btn:hover {
-        background: #FF6B6B22;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -156,11 +149,12 @@ def profile_card(user: dict):
     with col_av:
         photo_b64 = _load_photo(user.get("photo_path"))
         
-        # Display avatar
+        # Display avatar with pencil icon on top
         if photo_b64:
             st.markdown(f'''
             <div class="avatar-wrapper">
                 <img src="data:image/jpeg;base64,{photo_b64}" alt="Profile Photo">
+                <div class="avatar-edit-icon" id="edit_icon_{user['id']}">🖊️</div>
             </div>
             ''', unsafe_allow_html=True)
         else:
@@ -168,17 +162,19 @@ def profile_card(user: dict):
             st.markdown(f'''
             <div class="avatar-wrapper">
                 <div class="avatar-initials">{initials}</div>
+                <div class="avatar-edit-icon" id="edit_icon_{user['id']}">🖊️</div>
             </div>
             ''', unsafe_allow_html=True)
         
-        # Edit button (pencil icon)
-        if st.button("🖊️ Edit", key=f"edit_photo_{user['id']}", help="Change photo", use_container_width=True):
+        # ── زر القلم (اللي بيظهر/يخفي الـ upload) ──────────────────────────
+        if st.button("🖊️ Change Photo", key=f"edit_photo_{user['id']}", help="Change photo"):
             st.session_state[upload_key] = not st.session_state[upload_key]
             st.rerun()
         
         # ── Upload area ────────────────────────────────────────────────────
         if st.session_state[upload_key]:
             st.markdown('<div class="upload-area">', unsafe_allow_html=True)
+            st.markdown('<p>📸 Upload a new photo</p>', unsafe_allow_html=True)
             
             uploaded = st.file_uploader(
                 "Choose a photo...",
@@ -201,7 +197,7 @@ def profile_card(user: dict):
 
             # Remove photo button (only if photo exists)
             if user.get("photo_path") and os.path.exists(user["photo_path"]):
-                if st.button("🗑️ Remove", key=f"del_photo_{user['id']}", use_container_width=True):
+                if st.button("🗑️ Remove Photo", key=f"del_photo_{user['id']}"):
                     try:
                         os.remove(user["photo_path"])
                     except:
