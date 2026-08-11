@@ -151,7 +151,6 @@ def render_callbacks_tab(user: dict):
     warm = sum(1 for c in callbacks if c["status"] == "Warm")
     hot = sum(1 for c in callbacks if c["status"] == "Hot")
 
-    # Metrics in one row
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("📊 Total", total)
@@ -166,11 +165,10 @@ def render_callbacks_tab(user: dict):
         rate = round(completed_count / total * 100) if total else 0
         st.metric("✅ Rate", f"{rate}%")
 
-    # ── Chart (smaller) ──────────────────────────────────────────────────────
+    # ── Chart (small) ────────────────────────────────────────────────────────
     try:
         import plotly.express as px
         
-        # Count statuses
         status_counts = {}
         for s in ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]:
             count = sum(1 for c in callbacks if c["status"] == s)
@@ -191,7 +189,6 @@ def render_callbacks_tab(user: dict):
                 "Cancelled": "#FF6B6B"
             }
             
-            # Chart with smaller size
             fig = px.bar(
                 sc, x="Status", y="Count", color="Status",
                 template="plotly_dark",
@@ -199,7 +196,6 @@ def render_callbacks_tab(user: dict):
                 title="Callback Status Overview"
             )
             
-            # Make chart smaller
             fig.update_layout(
                 paper_bgcolor="#1A1D27",
                 plot_bgcolor="#1A1D27",
@@ -207,8 +203,7 @@ def render_callbacks_tab(user: dict):
                 showlegend=False,
                 margin=dict(l=10, r=10, t=35, b=10),
                 title_font_size=12,
-                height=250,  # Smaller height
-                width=None,
+                height=250,
             )
             fig.update_traces(
                 texttemplate='%{y}',
@@ -248,6 +243,14 @@ def render_callbacks_tab(user: dict):
                     if not cust_name or not phone:
                         st.error("Customer Name and Phone are required.")
                     else:
+                        # Combine address and notes
+                        if address and notes:
+                            full_notes = f"📍 Address: {address}\n\n📝 Notes: {notes}"
+                        elif address:
+                            full_notes = f"📍 Address: {address}"
+                        else:
+                            full_notes = notes
+                            
                         add_callback(
                             user.get("employee_id"),
                             cust_name,
@@ -255,7 +258,7 @@ def render_callbacks_tab(user: dict):
                             cb_date.isoformat(),
                             cb_time.strftime("%H:%M"),
                             status,
-                            f"Address: {address}\nNotes: {notes}" if address else notes
+                            full_notes
                         )
                         _sync_excel()
                         sheet_url = st.session_state.get("callbacks_sheet_url", "")
@@ -288,19 +291,27 @@ def render_callbacks_tab(user: dict):
                     or search_lower in (c.get("phone", "") or "").lower()
                     or search_lower in (c.get("notes", "") or "").lower()]
 
-    # ── Records in plain text format ─────────────────────────────────────────
+    # ── Records ──────────────────────────────────────────────────────────────
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
     for cb in filtered:
-        # Parse notes to extract address
+        # Extract address and notes from combined notes
         notes_text = cb.get("notes", "")
         address_text = ""
-        if "Address:" in notes_text:
+        
+        # Try to extract address if stored with format "📍 Address: ..."
+        if "📍 Address:" in notes_text:
+            parts = notes_text.split("📍 Address:")
+            if len(parts) > 1:
+                address_parts = parts[1].split("📝 Notes:")
+                address_text = address_parts[0].strip() if address_parts else ""
+                notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
+        elif "Address:" in notes_text:
             parts = notes_text.split("Address:")
             if len(parts) > 1:
-                address_part = parts[1].split("Notes:")
-                address_text = address_part[0].strip() if address_part else ""
-                notes_text = address_part[1].strip() if len(address_part) > 1 else ""
+                address_parts = parts[1].split("Notes:")
+                address_text = address_parts[0].strip() if address_parts else ""
+                notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
         
         # Get color based on status
         if cb["status"] in STATUS_COLORS:
@@ -310,7 +321,7 @@ def render_callbacks_tab(user: dict):
             txt_color, bg_color = LEGACY_STATUS_COLORS.get(cb["status"], ("#8B90A8", "#1A1D27"))
             emoji = ""
 
-        # Build the record display
+        # Build the record
         record_html = f"""
         <div class="cb-card">
             <div class="cb-row">
@@ -326,7 +337,7 @@ def render_callbacks_tab(user: dict):
                     <div class="cb-dt">📅 {cb.get('callback_date', '—')} &nbsp; ⏰ {cb.get('callback_time', '—')}</div>
         """
         
-        if notes_text:
+        if notes_text and notes_text.strip():
             record_html += f'<div class="cb-notes">📝 {notes_text}</div>'
         
         record_html += f"""
@@ -337,15 +348,15 @@ def render_callbacks_tab(user: dict):
                     </span>
         """
         
-        # Actions (only for employees)
+        # Actions for employees only
         if is_employee:
             record_html += f"""
                     <div style="display:flex;gap:6px;margin-top:6px;">
                         <select style="background:#1A1D27;color:#E8EAF0;border:1px solid #2E3350;border-radius:6px;padding:4px 8px;font-size:0.75rem;" id="stat_select_{cb['id']}">
                             {''.join(f'<option value="{s}" {"selected" if s == cb["status"] else ""}>{s}</option>' for s in ["Cold","Warm","Hot","Pending","Completed","Cancelled"])}
                         </select>
-                        <button style="background:#4F6BFF;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;" onclick="updateStatus({cb['id']})">💾</button>
-                        <button style="background:#FF6B6B;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;" onclick="deleteCallback({cb['id']})">🗑️</button>
+                        <button style="background:#4F6BFF;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">💾</button>
+                        <button style="background:#FF6B6B;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🗑️</button>
                     </div>
             """
         else:
