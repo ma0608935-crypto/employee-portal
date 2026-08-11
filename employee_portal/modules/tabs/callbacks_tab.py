@@ -62,36 +62,37 @@ def render_callbacks_tab(user: dict):
     <style>
     .cb-card {
         background: #1A1D27;
-        border: 2px solid #2E3350;
-        border-radius: 12px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 0.75rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        border: 1.5px solid #2E3350;
+        border-radius: 10px;
+        padding: 0.7rem 0.9rem;
+        margin-bottom: 0.6rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         transition: all 0.2s;
+        max-width: 100%;
     }
     .cb-card:hover {
         border-color: #4F6BFF;
-        box-shadow: 0 2px 12px rgba(79,107,255,0.15);
+        box-shadow: 0 2px 10px rgba(79,107,255,0.12);
+    }
+    
+    .cb-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+        gap: 8px;
     }
     .cb-name {
         font-weight: 600;
         color: #E8EAF0;
-        font-size: 1.05rem;
-    }
-    .cb-detail {
-        color: #C8CADE;
-        font-size: 0.95rem;
-        margin-top: 4px;
-    }
-    .cb-detail-icon {
-        color: #8B90A8;
-        margin-right: 6px;
+        font-size: 0.9rem;
+        margin: 0;
     }
     .status-pill {
         display: inline-block;
-        padding: 4px 16px;
-        border-radius: 20px;
-        font-size: 0.8rem;
+        padding: 2px 12px;
+        border-radius: 16px;
+        font-size: 0.7rem;
         font-weight: 600;
         text-align: center;
         white-space: nowrap;
@@ -103,105 +104,88 @@ def render_callbacks_tab(user: dict):
     .status-completed { background: #06D6A022; color: #06D6A0; border: 1px solid #06D6A055; }
     .status-cancelled { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
     
-    .cb-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 6px;
-        gap: 10px;
-    }
-    
     .cb-body {
         margin-top: 2px;
+    }
+    .cb-detail {
+        color: #C8CADE;
+        font-size: 0.82rem;
+        margin-top: 1px;
+        line-height: 1.4;
+    }
+    .cb-detail-icon {
+        color: #8B90A8;
+        margin-right: 4px;
+    }
+    .cb-notes {
+        color: #8B90A8;
+        font-size: 0.8rem;
+        margin-top: 3px;
+        font-style: italic;
+        border-top: 1px solid #2E3350;
+        padding-top: 4px;
     }
     
     .cb-actions {
         display: flex;
-        gap: 10px;
+        gap: 6px;
         align-items: center;
-        margin-top: 12px;
-        padding-top: 10px;
+        margin-top: 8px;
+        padding-top: 6px;
         border-top: 1px solid #2E3350;
         flex-wrap: wrap;
     }
-    
     .cb-status-select {
         background: #1A1D27;
         color: #E8EAF0;
         border: 1px solid #2E3350;
-        border-radius: 6px;
-        padding: 5px 10px;
-        font-size: 0.8rem;
+        border-radius: 5px;
+        padding: 3px 8px;
+        font-size: 0.7rem;
         cursor: pointer;
-        min-width: 120px;
+        min-width: 90px;
+        height: 26px;
     }
     .cb-status-select:focus {
         outline: none;
         border-color: #4F6BFF;
     }
     
-    .status-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    
     .btn-update {
         background: #4F6BFF;
         color: white;
         border: none;
-        border-radius: 6px;
-        padding: 6px 18px;
-        font-size: 0.8rem;
+        border-radius: 5px;
+        padding: 4px 12px;
+        font-size: 0.7rem;
         cursor: pointer;
         font-weight: 500;
         transition: all 0.2s;
+        height: 26px;
     }
     .btn-update:hover {
         background: #3B55E6;
-        transform: translateY(-1px);
     }
     .btn-delete {
         background: #FF6B6B;
         color: white;
         border: none;
-        border-radius: 6px;
-        padding: 6px 18px;
-        font-size: 0.8rem;
+        border-radius: 5px;
+        padding: 4px 12px;
+        font-size: 0.7rem;
         cursor: pointer;
         font-weight: 500;
         transition: all 0.2s;
+        height: 26px;
     }
     .btn-delete:hover {
         background: #E65555;
-        transform: translateY(-1px);
     }
     
-    .cb-notes {
-        color: #8B90A8;
-        font-size: 0.9rem;
-        margin-top: 6px;
-        font-style: italic;
-        border-top: 1px solid #2E3350;
-        padding-top: 6px;
-    }
     .cb-readonly {
         color: #8B90A8;
-        font-size: 0.8rem;
+        font-size: 0.7rem;
         margin-top: 4px;
-    }
-    
-    .cb-actions-left {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex: 1;
-    }
-    .cb-actions-right {
-        display: flex;
-        gap: 8px;
-        align-items: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -378,11 +362,11 @@ def render_callbacks_tab(user: dict):
     # ── Records ──────────────────────────────────────────────────────────────
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
-    # Display in 2 columns
-    cols = st.columns(2)
+    # Display in 3 columns عشان نضغط المساحة
+    cols = st.columns(3)
     
     for idx, cb in enumerate(filtered):
-        with cols[idx % 2]:
+        with cols[idx % 3]:
             # Extract address and notes
             notes_text = cb.get("notes", "")
             address_text = ""
@@ -417,7 +401,7 @@ def render_callbacks_tab(user: dict):
             st.markdown(f'<span class="status-pill {status_class}">{emoji} {cb["status"]}</span>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Body: كل البيانات
+            # Body: كل البيانات تحت بعض
             st.markdown('<div class="cb-body">', unsafe_allow_html=True)
             
             # Phone
@@ -436,13 +420,13 @@ def render_callbacks_tab(user: dict):
             
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # ── Actions: Dropdown + Buttons تحت البيانات ────────────────────
+            # ── Actions: Dropdown + Buttons ──────────────────────────────────
             if is_employee:
                 st.markdown('<div class="cb-actions">', unsafe_allow_html=True)
                 
                 # Dropdown لتغيير الحالة
                 new_status = st.selectbox(
-                    "Change Status",
+                    "",
                     all_statuses_list,
                     index=current_idx,
                     key=f"stat_{cb['id']}",
@@ -450,13 +434,13 @@ def render_callbacks_tab(user: dict):
                 )
                 
                 # Update button
-                if st.button("💾 Update", key=f"upd_{cb['id']}"):
+                if st.button("💾", key=f"upd_{cb['id']}", help="Update status"):
                     update_callback(cb["id"], status=new_status)
                     _sync_excel()
                     st.rerun()
                 
                 # Delete button
-                if st.button("🗑️ Delete", key=f"del_{cb['id']}"):
+                if st.button("🗑️", key=f"del_{cb['id']}", help="Delete"):
                     delete_callback(cb["id"])
                     _sync_excel()
                     st.rerun()
