@@ -14,12 +14,11 @@ CB_FILE = os.path.join(DATA_DIR, "callbacks.xlsx")
 
 STATUS_OPTS = ["Cold", "Warm", "Hot"]
 STATUS_COLORS = {
-    "Cold": ("#4F6BFF", "#4F6BFF22"),      # أزرق
-    "Warm": ("#FF9F43", "#FF9F4322"),      # برتقالي
-    "Hot": ("#FF6B6B", "#FF6B6B22"),       # أحمر
+    "Cold": ("#4F6BFF", "#4F6BFF22"),
+    "Warm": ("#FF9F43", "#FF9F4322"),
+    "Hot": ("#FF6B6B", "#FF6B6B22"),
 }
 
-# للتوافق مع البيانات القديمة
 LEGACY_STATUS_OPTS = ["Pending", "Completed", "Cancelled"]
 LEGACY_STATUS_COLORS = {
     "Pending": ("#FFD166", "#FFD16622"),
@@ -60,15 +59,65 @@ def render_callbacks_tab(user: dict):
 
     st.markdown("""
     <style>
-    .cb-card { background:#1A1D27;border:1px solid #2E3350;border-radius:14px;
-               padding:1rem;margin-bottom:0.6rem; }
-    .cb-name  { font-weight:600;color:#E8EAF0;font-size:0.95rem; }
-    .cb-phone { color:#8B90A8;font-size:0.82rem; }
-    .cb-address { color:#8B90A8;font-size:0.82rem; }
-    .cb-dt    { color:#C8CADE;font-size:0.82rem; }
-    .cb-notes { color:#8B90A8;font-size:0.78rem;margin-top:3px; }
-    .status-pill { display:inline-block;padding:3px 14px;border-radius:20px;
-                   font-size:0.75rem;font-weight:600; }
+    .cb-card {
+        background: #1A1D27;
+        border: 1px solid #2E3350;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .cb-name {
+        font-weight: 600;
+        color: #E8EAF0;
+        font-size: 1rem;
+    }
+    .cb-phone {
+        color: #8B90A8;
+        font-size: 0.9rem;
+        margin-top: 2px;
+    }
+    .cb-address {
+        color: #8B90A8;
+        font-size: 0.9rem;
+        margin-top: 2px;
+    }
+    .cb-dt {
+        color: #C8CADE;
+        font-size: 0.85rem;
+        margin-top: 4px;
+    }
+    .cb-notes {
+        color: #8B90A8;
+        font-size: 0.85rem;
+        margin-top: 6px;
+        font-style: italic;
+        border-top: 1px solid #2E3350;
+        padding-top: 6px;
+    }
+    .status-pill {
+        display: inline-block;
+        padding: 4px 16px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-align: center;
+    }
+    .cb-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .cb-left {
+        flex: 1;
+    }
+    .cb-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        min-width: 100px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -101,57 +150,72 @@ def render_callbacks_tab(user: dict):
     cold = sum(1 for c in callbacks if c["status"] == "Cold")
     warm = sum(1 for c in callbacks if c["status"] == "Warm")
     hot = sum(1 for c in callbacks if c["status"] == "Hot")
-    
-    # للتوافق مع البيانات القديمة
-    pending = sum(1 for c in callbacks if c["status"] in ["Pending", "Cold", "Warm"])
-    completed = sum(1 for c in callbacks if c["status"] == "Completed")
-    cancelled = sum(1 for c in callbacks if c["status"] == "Cancelled")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.metric("Total", total)
-    with c2:
+    # Metrics in one row
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("📊 Total", total)
+    with col2:
         st.metric("🔵 Cold", cold)
-    with c3:
+    with col3:
         st.metric("🟠 Warm", warm)
-    with c4:
+    with col4:
         st.metric("🔴 Hot", hot)
-    with c5:
+    with col5:
         completed_count = sum(1 for c in callbacks if c["status"] == "Completed")
         rate = round(completed_count / total * 100) if total else 0
-        st.metric("Completion Rate", f"{rate}%")
+        st.metric("✅ Rate", f"{rate}%")
 
+    # ── Chart (smaller) ──────────────────────────────────────────────────────
     try:
         import plotly.express as px
-        if callbacks:
-            # Count statuses
-            status_counts = {}
-            for s in ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]:
-                count = sum(1 for c in callbacks if c["status"] == s)
-                if count > 0:
-                    status_counts[s] = count
+        
+        # Count statuses
+        status_counts = {}
+        for s in ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]:
+            count = sum(1 for c in callbacks if c["status"] == s)
+            if count > 0:
+                status_counts[s] = count
+        
+        if status_counts:
+            sc = pd.DataFrame({
+                "Status": list(status_counts.keys()),
+                "Count": list(status_counts.values())
+            })
+            color_map = {
+                "Cold": "#4F6BFF",
+                "Warm": "#FF9F43",
+                "Hot": "#FF6B6B",
+                "Pending": "#FFD166",
+                "Completed": "#06D6A0",
+                "Cancelled": "#FF6B6B"
+            }
             
-            if status_counts:
-                sc = pd.DataFrame({
-                    "Status": list(status_counts.keys()),
-                    "Count": list(status_counts.values())
-                })
-                color_map = {
-                    "Cold": "#4F6BFF",
-                    "Warm": "#FF9F43",
-                    "Hot": "#FF6B6B",
-                    "Pending": "#FFD166",
-                    "Completed": "#06D6A0",
-                    "Cancelled": "#FF6B6B"
-                }
-                fig = px.bar(sc, x="Status", y="Count", color="Status",
-                             template="plotly_dark",
-                             color_discrete_map=color_map,
-                             title="Callback Status Overview")
-                fig.update_layout(paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                                  font_color="#C8CADE", showlegend=False,
-                                  margin=dict(l=10, r=10, t=40, b=10), title_font_size=13)
-                st.plotly_chart(fig, use_container_width=True)
+            # Chart with smaller size
+            fig = px.bar(
+                sc, x="Status", y="Count", color="Status",
+                template="plotly_dark",
+                color_discrete_map=color_map,
+                title="Callback Status Overview"
+            )
+            
+            # Make chart smaller
+            fig.update_layout(
+                paper_bgcolor="#1A1D27",
+                plot_bgcolor="#1A1D27",
+                font_color="#C8CADE",
+                showlegend=False,
+                margin=dict(l=10, r=10, t=35, b=10),
+                title_font_size=12,
+                height=250,  # Smaller height
+                width=None,
+            )
+            fig.update_traces(
+                texttemplate='%{y}',
+                textposition='outside',
+                textfont_size=11
+            )
+            st.plotly_chart(fig, use_container_width=True)
     except ImportError:
         pass
 
@@ -173,7 +237,6 @@ def render_callbacks_tab(user: dict):
                 
                 notes = st.text_area("Notes", height=80, placeholder="Add any additional notes about this callback...")
                 
-                # Status color indicator
                 status_colors = {
                     "Cold": "🔵 Cold - Not urgent, follow up later",
                     "Warm": "🟠 Warm - Interested, follow up soon",
@@ -201,19 +264,17 @@ def render_callbacks_tab(user: dict):
                         st.success("Callback added successfully! ✅")
                         st.rerun()
     else:
-        # Admin/Leader sees a message instead of the add form
         st.info("👀 You are viewing all employee callbacks. Only employees can add new callbacks.")
 
     # ── Filters ───────────────────────────────────────────────────────────────
     c1, c2, c3 = st.columns([2, 2, 2])
     with c1:
-        # Show all statuses including legacy ones
         all_statuses = ["All"] + STATUS_OPTS + LEGACY_STATUS_OPTS
         stat_f = st.selectbox("Filter Status", all_statuses, key="cb_stat")
     with c2:
         date_f = st.date_input("Filter Date", value=None, key="cb_date")
     with c3:
-        search = st.text_input("🔍 Search Customer", key="cb_search")
+        search = st.text_input("🔍 Search", placeholder="Customer, phone, or notes...", key="cb_search")
 
     filtered = callbacks[:]
     if stat_f != "All":
@@ -221,81 +282,84 @@ def render_callbacks_tab(user: dict):
     if date_f:
         filtered = [c for c in filtered if c.get("callback_date") == str(date_f)]
     if search:
+        search_lower = search.lower()
         filtered = [c for c in filtered
-                    if search.lower() in (c.get("customer_name", "") or "").lower()
-                    or search.lower() in (c.get("phone", "") or "").lower()
-                    or search.lower() in (c.get("notes", "") or "").lower()]
+                    if search_lower in (c.get("customer_name", "") or "").lower()
+                    or search_lower in (c.get("phone", "") or "").lower()
+                    or search_lower in (c.get("notes", "") or "").lower()]
 
-    # ── Cards ─────────────────────────────────────────────────────────────────
-    st.markdown(f"#### Callbacks ({len(filtered)} records)")
+    # ── Records in plain text format ─────────────────────────────────────────
+    st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
+
     for cb in filtered:
-        col_text, col_stat, col_actions = st.columns([4, 1, 2])
+        # Parse notes to extract address
+        notes_text = cb.get("notes", "")
+        address_text = ""
+        if "Address:" in notes_text:
+            parts = notes_text.split("Address:")
+            if len(parts) > 1:
+                address_part = parts[1].split("Notes:")
+                address_text = address_part[0].strip() if address_part else ""
+                notes_text = address_part[1].strip() if len(address_part) > 1 else ""
         
         # Get color based on status
         if cb["status"] in STATUS_COLORS:
             txt_color, bg_color = STATUS_COLORS.get(cb["status"], ("#8B90A8", "#1A1D27"))
+            emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
         else:
             txt_color, bg_color = LEGACY_STATUS_COLORS.get(cb["status"], ("#8B90A8", "#1A1D27"))
+            emoji = ""
+
+        # Build the record display
+        record_html = f"""
+        <div class="cb-card">
+            <div class="cb-row">
+                <div class="cb-left">
+                    <div class="cb-name">👤 {cb.get('customer_name', '—')}</div>
+                    <div class="cb-phone">📱 {cb.get('phone', '—')}</div>
+        """
         
-        with col_text:
-            # Parse notes to extract address if stored in notes
-            notes_text = cb.get("notes", "")
-            address_text = ""
-            if "Address:" in notes_text:
-                parts = notes_text.split("Address:")
-                if len(parts) > 1:
-                    address_part = parts[1].split("Notes:")
-                    address_text = address_part[0].strip() if address_part else ""
-                    notes_text = address_part[1].strip() if len(address_part) > 1 else ""
-            
-            st.markdown(f"""
-            <div class="cb-card">
-                <div class="cb-name">👤 {cb.get('customer_name', '—')}</div>
-                <div class="cb-phone">📱 {cb.get('phone', '—')}</div>
-                {f'<div class="cb-address">📍 {address_text}</div>' if address_text else ''}
-                <div class="cb-dt">📅 {cb.get('callback_date', '—')} &nbsp; 🕐 {cb.get('callback_time', '—')}</div>
-                {f'<div class="cb-notes">📝 {notes_text}</div>' if notes_text else ''}
-            </div>""", unsafe_allow_html=True)
+        if address_text:
+            record_html += f'<div class="cb-address">📍 {address_text}</div>'
         
-        with col_stat:
-            # Status badge with emoji
-            emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
-            st.markdown(f"""
-            <div style="padding-top:1rem">
-                <span class="status-pill"
-                      style="color:{txt_color};background:{bg_color};border:1px solid {txt_color}55">
-                    {emoji} {cb['status']}
-                </span>
-            </div>""", unsafe_allow_html=True)
+        record_html += f"""
+                    <div class="cb-dt">📅 {cb.get('callback_date', '—')} &nbsp; ⏰ {cb.get('callback_time', '—')}</div>
+        """
         
-        with col_actions:
-            if is_employee:
-                # Employee can update/delete their own callbacks
-                st.markdown('<div style="padding-top:0.5rem">', unsafe_allow_html=True)
-                # Show status options including legacy ones for compatibility
-                all_status_options = STATUS_OPTS + LEGACY_STATUS_OPTS
-                current_status = cb["status"]
-                if current_status not in all_status_options:
-                    all_status_options = [current_status] + all_status_options
-                
-                new_stat = st.selectbox("", all_status_options,
-                                        index=all_status_options.index(current_status) if current_status in all_status_options else 0,
-                                        key=f"stat_sel_{cb['id']}",
-                                        label_visibility="collapsed")
-                col_u, col_d = st.columns(2)
-                with col_u:
-                    if st.button("💾", key=f"upd_{cb['id']}", help="Update status"):
-                        update_callback(cb["id"], status=new_stat)
-                        _sync_excel()
-                        st.rerun()
-                with col_d:
-                    if st.button("🗑️", key=f"del_{cb['id']}", help="Delete"):
-                        delete_callback(cb["id"])
-                        _sync_excel()
-                        st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div style="padding-top:1rem;color:#8B90A8;font-size:0.8rem">🔒 Read-only</div>', unsafe_allow_html=True)
+        if notes_text:
+            record_html += f'<div class="cb-notes">📝 {notes_text}</div>'
+        
+        record_html += f"""
+                </div>
+                <div class="cb-right">
+                    <span class="status-pill" style="color:{txt_color};background:{bg_color};border:1px solid {txt_color}55;">
+                        {emoji} {cb['status']}
+                    </span>
+        """
+        
+        # Actions (only for employees)
+        if is_employee:
+            record_html += f"""
+                    <div style="display:flex;gap:6px;margin-top:6px;">
+                        <select style="background:#1A1D27;color:#E8EAF0;border:1px solid #2E3350;border-radius:6px;padding:4px 8px;font-size:0.75rem;" id="stat_select_{cb['id']}">
+                            {''.join(f'<option value="{s}" {"selected" if s == cb["status"] else ""}>{s}</option>' for s in ["Cold","Warm","Hot","Pending","Completed","Cancelled"])}
+                        </select>
+                        <button style="background:#4F6BFF;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;" onclick="updateStatus({cb['id']})">💾</button>
+                        <button style="background:#FF6B6B;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;" onclick="deleteCallback({cb['id']})">🗑️</button>
+                    </div>
+            """
+        else:
+            record_html += f"""
+                    <div style="color:#8B90A8;font-size:0.75rem;margin-top:4px;">🔒 Read-only</div>
+            """
+        
+        record_html += """
+                </div>
+            </div>
+        </div>
+        """
+        
+        st.markdown(record_html, unsafe_allow_html=True)
 
     if not filtered:
         st.info("No callbacks match the current filters.")
