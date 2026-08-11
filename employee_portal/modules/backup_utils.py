@@ -6,7 +6,6 @@ Automatic backup utilities with Google Drive support
 import os
 import shutil
 import sqlite3
-import json
 import streamlit as st
 from datetime import datetime, timedelta
 import pandas as pd
@@ -40,45 +39,37 @@ def create_backup(upload_to_drive_flag=True):
         # Also export as CSV for easy viewing
         export_backup_as_csv(timestamp)
         
-        # Upload to Google Drive if enabled
-        drive_link = None
-        if upload_to_drive_flag:
-            try:
-                from modules.drive_apps_script import backup_to_drive_apps_script
-                success, msg = backup_to_drive_apps_script()
-                if success:
-                    drive_link = "Uploaded to Google Drive"
-            except:
-                pass
-        
         # Clean old backups (keep last 30 days)
         clean_old_backups(days_to_keep=30)
         
-        return True, f"Backup created: {backup_filename}", drive_link
+        return True, f"Backup created: {backup_filename}", None
     except Exception as e:
         return False, f"Backup failed: {str(e)}", None
 
 
 def export_backup_as_csv(timestamp):
     """Export database tables to CSV files."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = cursor.fetchall()
-    
-    backup_csv_dir = os.path.join(BACKUP_DIR, f"csv_{timestamp}")
-    os.makedirs(backup_csv_dir, exist_ok=True)
-    
-    for table in tables:
-        table_name = table[0]
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
-            df.to_csv(os.path.join(backup_csv_dir, f"{table_name}.csv"), index=False)
-        except:
-            pass
-    
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        
+        backup_csv_dir = os.path.join(BACKUP_DIR, f"csv_{timestamp}")
+        os.makedirs(backup_csv_dir, exist_ok=True)
+        
+        for table in tables:
+            table_name = table[0]
+            try:
+                df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+                df.to_csv(os.path.join(backup_csv_dir, f"{table_name}.csv"), index=False)
+            except:
+                pass
+        
+        conn.close()
+    except:
+        pass
 
 
 def clean_old_backups(days_to_keep=30):
