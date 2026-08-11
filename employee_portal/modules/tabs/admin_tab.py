@@ -285,9 +285,13 @@ def render_google_drive_backup_section():
     """Render Google Drive backup section."""
     st.markdown('<div class="sec-title">☁️ Google Drive Backup</div>', unsafe_allow_html=True)
     
-    # Check configuration
-    web_app_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
-    folder_id = st.secrets.get("drive_apps_script", {}).get("folder_id", None)
+    # Check if secrets exist
+    try:
+        web_app_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+        folder_id = st.secrets.get("drive_apps_script", {}).get("folder_id", None)
+    except:
+        web_app_url = None
+        folder_id = None
     
     if not web_app_url:
         st.warning("""
