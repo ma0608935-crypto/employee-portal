@@ -110,7 +110,11 @@ def render_admin_tab(user: dict):
                 else:
                     ok, msg = add_user(u_user, u_pw, u_role, u_name, u_eid,
                                        u_dept, u_pos, u_em, u_ph, u_hd)
-                    st.success(msg) if ok else st.error(f"Failed: {msg}")
+                    if ok:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(f"Failed: {msg}")
 
     elif selected == "📋 All Attendance":
         st.markdown('<div class="sec-title">All Attendance Records</div>', unsafe_allow_html=True)
@@ -162,6 +166,7 @@ def render_admin_tab(user: dict):
                 if note_text.strip():
                     add_note(emp_options[sel_emp], user.get("full_name","Admin"), note_text.strip())
                     st.success("Note added!")
+                    st.rerun()
                 else:
                     st.warning("Note cannot be empty.")
             if sel_emp:
