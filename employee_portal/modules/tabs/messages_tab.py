@@ -225,4 +225,35 @@ def render_messages_tab(user: dict):
             message = st.text_area("Message", height=200, value=default_message)
             
             # Send button
-           
+            col1, col2, col3 = st.columns([2, 1, 2])
+            with col2:
+                if st.button("📤 Send Message", use_container_width=True, type="primary"):
+                    if not subject or not message:
+                        st.error("Please fill in both subject and message.")
+                    else:
+                        parent_id = reply_to["id"] if reply_mode and reply_to else None
+                        
+                        send_message(
+                            sender_id=employee_id,
+                            sender_name=user.get("full_name", "Unknown"),
+                            sender_role=user["role"],
+                            receiver_id=recipient["employee_id"],
+                            receiver_name=recipient.get("full_name", "Unknown"),
+                            subject=subject,
+                            message=message,
+                            parent_id=parent_id
+                        )
+                        
+                        # Clear reply mode
+                        st.session_state.reply_mode = False
+                        st.session_state.reply_to = None
+                        
+                        st.success(f"✅ Message sent to {recipient.get('full_name', '')}!")
+                        st.rerun()
+        
+        # Clear reply mode button
+        if reply_mode:
+            if st.button("❌ Cancel Reply"):
+                st.session_state.reply_mode = False
+                st.session_state.reply_to = None
+                st.rerun()
