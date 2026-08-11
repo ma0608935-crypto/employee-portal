@@ -48,12 +48,12 @@ def render_admin_tab(user: dict):
                          or search.lower() in (e.get("employee_id","") or "").lower()
                          or search.lower() in (e.get("department","") or "").lower()]
         seen = set()
-for idx, emp in enumerate(employees):
-    uid = emp.get('id', idx)
-    if uid in seen:
-        continue
-    seen.add(uid)
-    k = f"{_P}{uid}_{idx}"
+        for idx, emp in enumerate(employees):
+            uid = emp.get('id', idx)
+            if uid in seen:
+                continue
+            seen.add(uid)
+            k = f"{_P}{uid}_{idx}"
             with st.expander(
                 f"{emp.get('full_name','—')} [{emp.get('employee_id','—')}] — {emp.get('role','').capitalize()}",
                 expanded=False
