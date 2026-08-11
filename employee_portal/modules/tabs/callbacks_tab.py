@@ -57,139 +57,6 @@ def render_callbacks_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     is_employee = user["role"] == "employee"
 
-    # ── Custom CSS ────────────────────────────────────────────────────────────
-    st.markdown("""
-    <style>
-    .cb-card {
-        background: #1A1D27;
-        border: 1.5px solid #2E3350;
-        border-radius: 10px;
-        padding: 0.8rem 1rem;
-        margin-bottom: 0.6rem;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-        transition: all 0.2s;
-        max-width: 100%;
-    }
-    .cb-card:hover {
-        border-color: #4F6BFF;
-        box-shadow: 0 2px 10px rgba(79,107,255,0.12);
-    }
-    
-    .cb-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 4px;
-        gap: 8px;
-    }
-    .cb-name {
-        font-weight: 600;
-        color: #E8EAF0;
-        font-size: 1rem;
-        margin: 0;
-    }
-    .status-pill {
-        display: inline-block;
-        padding: 3px 14px;
-        border-radius: 16px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-align: center;
-        white-space: nowrap;
-    }
-    .status-cold { background: #4F6BFF22; color: #4F6BFF; border: 1px solid #4F6BFF55; }
-    .status-warm { background: #FF9F4322; color: #FF9F43; border: 1px solid #FF9F4355; }
-    .status-hot  { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
-    .status-pending { background: #FFD16622; color: #FFD166; border: 1px solid #FFD16655; }
-    .status-completed { background: #06D6A022; color: #06D6A0; border: 1px solid #06D6A055; }
-    .status-cancelled { background: #FF6B6B22; color: #FF6B6B; border: 1px solid #FF6B6B55; }
-    
-    .cb-body {
-        margin-top: 2px;
-    }
-    .cb-detail {
-        color: #C8CADE;
-        font-size: 0.9rem;
-        margin-top: 2px;
-        line-height: 1.5;
-    }
-    .cb-detail-icon {
-        color: #8B90A8;
-        margin-right: 6px;
-    }
-    .cb-notes {
-        color: #8B90A8;
-        font-size: 0.85rem;
-        margin-top: 4px;
-        font-style: italic;
-        border-top: 1px solid #2E3350;
-        padding-top: 4px;
-    }
-    
-    .cb-actions {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        margin-top: 8px;
-        padding-top: 6px;
-        border-top: 1px solid #2E3350;
-        flex-wrap: wrap;
-    }
-    .cb-status-select {
-        background: #1A1D27;
-        color: #E8EAF0;
-        border: 1px solid #2E3350;
-        border-radius: 5px;
-        padding: 4px 10px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        min-width: 90px;
-        height: 28px;
-    }
-    .cb-status-select:focus {
-        outline: none;
-        border-color: #4F6BFF;
-    }
-    
-    .btn-update {
-        background: #4F6BFF;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        padding: 4px 14px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s;
-        height: 28px;
-    }
-    .btn-update:hover {
-        background: #3B55E6;
-    }
-    .btn-delete {
-        background: #FF6B6B;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        padding: 4px 14px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s;
-        height: 28px;
-    }
-    .btn-delete:hover {
-        background: #E65555;
-    }
-    
-    .cb-readonly {
-        color: #8B90A8;
-        font-size: 0.75rem;
-        margin-top: 4px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     # ── Google Sheets config (admin only) ─────────────────────────────────────
     if is_admin:
         with st.expander("🔗 Google Sheets Integration", expanded=False):
@@ -362,92 +229,167 @@ def render_callbacks_tab(user: dict):
     # ── Records ──────────────────────────────────────────────────────────────
     st.markdown(f"#### 📋 Callbacks ({len(filtered)} records)")
 
-    # Display in 3 columns
-    cols = st.columns(3)
-    
     for idx, cb in enumerate(filtered):
-        with cols[idx % 3]:
-            # Extract address and notes
-            notes_text = cb.get("notes", "")
-            address_text = ""
+        # Extract address and notes
+        notes_text = cb.get("notes", "")
+        address_text = ""
+        
+        if "📍 Address:" in notes_text:
+            parts = notes_text.split("📍 Address:")
+            if len(parts) > 1:
+                address_parts = parts[1].split("📝 Notes:")
+                address_text = address_parts[0].strip() if address_parts else ""
+                notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
+        elif "Address:" in notes_text:
+            parts = notes_text.split("Address:")
+            if len(parts) > 1:
+                address_parts = parts[1].split("Notes:")
+                address_text = address_parts[0].strip() if address_parts else ""
+                notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
+        
+        # Get status class
+        emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
+        
+        # All statuses list for dropdown
+        all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
+        current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
+        
+        # ── Card باستخدام st.container و HTML ───────────────────────────────
+        with st.container():
+            # HTML للكارد كامل
+            card_html = f'''
+            <div style="
+                background: #1A1D27;
+                border: 2px solid #2E3350;
+                border-radius: 10px;
+                padding: 12px 14px;
+                margin-bottom: 10px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            ">
+                <!-- الصف الأول: الاسم + الحالة -->
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 6px;
+                ">
+                    <span style="
+                        font-weight: 600;
+                        color: #E8EAF0;
+                        font-size: 16px;
+                    ">👤 {cb.get('customer_name', '—')}</span>
+                    <span style="
+                        display: inline-block;
+                        padding: 3px 14px;
+                        border-radius: 16px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        background: #4F6BFF22;
+                        color: #4F6BFF;
+                        border: 1px solid #4F6BFF55;
+                    ">{emoji} {cb['status']}</span>
+                </div>
+                
+                <!-- التليفون -->
+                <div style="
+                    color: #C8CADE;
+                    font-size: 15px;
+                    margin-top: 2px;
+                ">
+                    <span style="color: #8B90A8;">📱</span> {cb.get('phone', '—')}
+                </div>
+            '''
             
-            if "📍 Address:" in notes_text:
-                parts = notes_text.split("📍 Address:")
-                if len(parts) > 1:
-                    address_parts = parts[1].split("📝 Notes:")
-                    address_text = address_parts[0].strip() if address_parts else ""
-                    notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
-            elif "Address:" in notes_text:
-                parts = notes_text.split("Address:")
-                if len(parts) > 1:
-                    address_parts = parts[1].split("Notes:")
-                    address_text = address_parts[0].strip() if address_parts else ""
-                    notes_text = address_parts[1].strip() if len(address_parts) > 1 else ""
-            
-            # Get status class
-            status_class = f"status-{cb['status'].lower()}"
-            emoji = {"Cold": "🔵", "Warm": "🟠", "Hot": "🔴"}.get(cb["status"], "")
-            
-            # All statuses list for dropdown
-            all_statuses_list = ["Cold", "Warm", "Hot", "Pending", "Completed", "Cancelled"]
-            current_idx = all_statuses_list.index(cb["status"]) if cb["status"] in all_statuses_list else 0
-            
-            # ── Card ──────────────────────────────────────────────────────────
-            st.markdown('<div class="cb-card">', unsafe_allow_html=True)
-            
-            # Header: Name + Status (جنب بعض)
-            st.markdown('<div class="cb-header">', unsafe_allow_html=True)
-            st.markdown(f'<span class="cb-name">👤 {cb.get("customer_name", "—")}</span>', unsafe_allow_html=True)
-            st.markdown(f'<span class="status-pill {status_class}">{emoji} {cb["status"]}</span>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Body: كل البيانات تحت بعض
-            st.markdown('<div class="cb-body">', unsafe_allow_html=True)
-            
-            # Phone
-            st.markdown(f'<div class="cb-detail"><span class="cb-detail-icon">📱</span> {cb.get("phone", "—")}</div>', unsafe_allow_html=True)
-            
-            # Address
+            # العنوان لو موجود
             if address_text:
-                st.markdown(f'<div class="cb-detail"><span class="cb-detail-icon">📍</span> {address_text}</div>', unsafe_allow_html=True)
+                card_html += f'''
+                <div style="
+                    color: #C8CADE;
+                    font-size: 15px;
+                    margin-top: 2px;
+                ">
+                    <span style="color: #8B90A8;">📍</span> {address_text}
+                </div>
+                '''
             
-            # Date & Time
-            st.markdown(f'<div class="cb-detail"><span class="cb-detail-icon">📅</span> {cb.get("callback_date", "—")} &nbsp; <span class="cb-detail-icon">⏰</span> {cb.get("callback_time", "—")}</div>', unsafe_allow_html=True)
+            # التاريخ والوقت
+            card_html += f'''
+                <div style="
+                    color: #C8CADE;
+                    font-size: 15px;
+                    margin-top: 2px;
+                ">
+                    <span style="color: #8B90A8;">📅</span> {cb.get('callback_date', '—')} &nbsp; 
+                    <span style="color: #8B90A8;">⏰</span> {cb.get('callback_time', '—')}
+                </div>
+            '''
             
-            # Notes
+            # الملاحظات لو موجودة
             if notes_text and notes_text.strip():
-                st.markdown(f'<div class="cb-notes">📝 {notes_text}</div>', unsafe_allow_html=True)
+                card_html += f'''
+                <div style="
+                    color: #8B90A8;
+                    font-size: 14px;
+                    margin-top: 4px;
+                    font-style: italic;
+                    border-top: 1px solid #2E3350;
+                    padding-top: 4px;
+                ">
+                    📝 {notes_text}
+                </div>
+                '''
             
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # ── Actions: Dropdown + Buttons ──────────────────────────────────
+            # الأزرار
             if is_employee:
-                st.markdown('<div class="cb-actions">', unsafe_allow_html=True)
+                card_html += '''
+                <div style="
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                    margin-top: 10px;
+                    padding-top: 8px;
+                    border-top: 1px solid #2E3350;
+                ">
+                '''
                 
-                # Dropdown لتغيير الحالة
-                new_status = st.selectbox(
-                    "",
-                    all_statuses_list,
-                    index=current_idx,
-                    key=f"stat_{cb['id']}",
-                    label_visibility="collapsed"
-                )
+                # استخدم st.selectbox و st.button جوا HTML
+                st.markdown(card_html, unsafe_allow_html=True)
                 
-                # Update button
-                if st.button("💾", key=f"upd_{cb['id']}", help="Update status"):
-                    update_callback(cb["id"], status=new_status)
-                    _sync_excel()
-                    st.rerun()
-                
-                # Delete button
-                if st.button("🗑️", key=f"del_{cb['id']}", help="Delete"):
-                    delete_callback(cb["id"])
-                    _sync_excel()
-                    st.rerun()
+                # الأزرار باستخدام Streamlit
+                col_sel, col_upd, col_del = st.columns([2, 1, 1])
+                with col_sel:
+                    new_status = st.selectbox(
+                        "",
+                        all_statuses_list,
+                        index=current_idx,
+                        key=f"stat_{cb['id']}",
+                        label_visibility="collapsed"
+                    )
+                with col_upd:
+                    if st.button("💾", key=f"upd_{cb['id']}", help="Update status"):
+                        update_callback(cb["id"], status=new_status)
+                        _sync_excel()
+                        st.rerun()
+                with col_del:
+                    if st.button("🗑️", key=f"del_{cb['id']}", help="Delete"):
+                        delete_callback(cb["id"])
+                        _sync_excel()
+                        st.rerun()
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="cb-readonly">🔒 Read-only</div>', unsafe_allow_html=True)
+                card_html += '''
+                <div style="
+                    margin-top: 8px;
+                    padding-top: 6px;
+                    border-top: 1px solid #2E3350;
+                    color: #8B90A8;
+                    font-size: 13px;
+                ">
+                    🔒 Read-only
+                </div>
+                '''
+                st.markdown(card_html, unsafe_allow_html=True)
             
             st.markdown('</div>', unsafe_allow_html=True)
 
