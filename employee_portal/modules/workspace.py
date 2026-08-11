@@ -11,7 +11,7 @@ from modules.tabs.attendance_tab import render_attendance_tab
 from modules.tabs.breaks_tab import render_breaks_tab
 from modules.tabs.callbacks_tab import render_callbacks_tab
 from modules.tabs.admin_tab import render_admin_tab
-from modules.tabs.maps_tab import render_maps_tab
+# from modules.tabs.maps_tab import render_maps_tab  # ← تم إلغاؤه
 from modules.tabs.reports_tab import render_reports_tab
 from modules.tabs.messages_tab import render_messages_tab
 from modules.components import profile_card, notes_panel, performance_dashboard
@@ -42,13 +42,13 @@ def render_workspace():
 
     is_admin = user["role"] in ("admin", "leader")
 
-    # ── تبويبات حسب الدور ──────────────────────────────────────────────────
+    # ── تبويبات حسب الدور (من غير Maps) ────────────────────────────────────
     if is_admin:
-        # الأدمن والليدر يشوفوا كل التبويبات بما فيها Reports و Admin
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📊 Reports", "📧 Messages", "🛡️ Admin"]
+        # الأدمن والليدر
+        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📊 Reports", "📧 Messages", "🛡️ Admin"]
     else:
-        # الموظف العادي مش بيشوف Reports و Admin
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "🗺️ Maps", "📧 Messages"]
+        # الموظف العادي
+        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📧 Messages"]
 
     selected_tab = st.radio(
         "Navigation",
@@ -70,10 +70,9 @@ def render_workspace():
         render_breaks_tab(user)
     elif selected_tab == "📞 Callbacks":
         render_callbacks_tab(user)
-    elif selected_tab == "🗺️ Maps":
-        render_maps_tab(user)
+    # elif selected_tab == "🗺️ Maps":  # ← تم إلغاؤه
+    #     render_maps_tab(user)
     elif selected_tab == "📊 Reports":
-        # فقط الأدمن والليدر يوصلوا هنا
         render_reports_tab(user)
     elif selected_tab == "📧 Messages":
         render_messages_tab(user)
