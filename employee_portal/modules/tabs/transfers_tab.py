@@ -283,15 +283,29 @@ def render_transfers_tab(user: dict):
     if "Status" in filtered.columns:
         status_counts = filtered["Status"].value_counts().to_dict()
     
-    col1, col2, col3, col4 = st.columns(4)
+    # Get closed count (case insensitive - matches "Closed" or "closed")
+    closed_count = 0
+    if "Status" in filtered.columns:
+        closed_count = sum(1 for s in filtered["Status"] if str(s).strip().lower() == "closed")
+    
+    # Get new count
+    new_count = 0
+    if "Status" in filtered.columns:
+        new_count = sum(1 for s in filtered["Status"] if str(s).strip().lower() == "new")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("📊 Total Transfers", total_transfers)
     with col2:
         st.metric("👤 Agents", total_agents)
     with col3:
-        st.metric("📌 New", status_counts.get("New", 0))
+        st.metric("📌 New", new_count)
     with col4:
-        st.metric("✅ Closed", status_counts.get("Closed", 0))
+        st.metric("✅ Closed", closed_count)
+    with col5:
+        # Close rate
+        rate = round((closed_count / total_transfers) * 100, 1) if total_transfers > 0 else 0
+        st.metric("🎯 Close Rate", f"{rate}%")
 
     # ── Charts ─────────────────────────────────────────────────────────────────
     try:
