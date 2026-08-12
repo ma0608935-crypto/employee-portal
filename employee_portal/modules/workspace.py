@@ -6,7 +6,7 @@ import streamlit as st
 from modules.auth import logout
 from modules.database import get_user
 from modules.tabs.profile_tab import render_profile_tab
-from modules.tabs.sales_tab import render_sales_tab
+from modules.tabs.transfers_tab import render_transfers_tab
 from modules.tabs.attendance_tab import render_attendance_tab
 from modules.tabs.breaks_tab import render_breaks_tab
 from modules.tabs.callbacks_tab import render_callbacks_tab
@@ -42,9 +42,9 @@ def render_workspace():
     is_admin = user["role"] in ("admin", "leader")
 
     if is_admin:
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📊 Reports", "📧 Messages", "🛡️ Admin"]
+        tab_labels = ["👤 Profile", "🔄 Transfers", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📊 Reports", "🛡️ Admin"]
     else:
-        tab_labels = ["👤 Profile", "💰 Sales", "📋 Attendance", "☕ Breaks", "📞 Callbacks", "📧 Messages"]
+        tab_labels = ["👤 Profile", "🔄 Transfers", "📋 Attendance", "☕ Breaks", "📞 Callbacks"]
 
     selected_tab = st.radio(
         "Navigation",
@@ -58,8 +58,8 @@ def render_workspace():
 
     if selected_tab == "👤 Profile":
         render_profile_tab(user)
-    elif selected_tab == "💰 Sales":
-        render_sales_tab(user)
+    elif selected_tab == "🔄 Transfers":
+        render_transfers_tab(user)
     elif selected_tab == "📋 Attendance":
         render_attendance_tab(user)
     elif selected_tab == "☕ Breaks":
@@ -68,8 +68,6 @@ def render_workspace():
         render_callbacks_tab(user)
     elif selected_tab == "📊 Reports":
         render_reports_tab(user)
-    elif selected_tab == "📧 Messages":
-        render_messages_tab(user)
     elif selected_tab == "🛡️ Admin" and is_admin:
         render_admin_tab(user)
 
