@@ -39,65 +39,6 @@ def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _push_to_sheets(df: pd.DataFrame, url: str):
-    """Write DataFrame back to a Google Sheet."""
-    try:
-        import gspread
-        from google.oauth2.service_account import Credentials
-        creds_dict = st.secrets.get("gcp_service_account", {})
-        if not creds_dict:
-            return False, "No GCP service account found in secrets.toml"
-        creds = Credentials.from_service_account_info(
-            dict(creds_dict),
-            scopes=[
-                "https://spreadsheets.google.com/feeds",
-                "https://www.googleapis.com/auth/drive",
-            ],
-        )
-        gc = gspread.authorize(creds)
-        sh = gc.open_by_url(url)
-        ws = sh.sheet1
-        ws.clear()
-        ws.update([df.columns.tolist()] + df.fillna("").astype(str).values.tolist())
-        return True, "✅ Synced to Google Sheets!"
-    except Exception as e:
-        return False, f"❌ {e}"
-
-
-def _append_to_sheets(row_data: dict, url: str):
-    """Append a single row to Google Sheet."""
-    try:
-        import gspread
-        from google.oauth2.service_account import Credentials
-        creds_dict = st.secrets.get("gcp_service_account", {})
-        if not creds_dict:
-            return False, "No GCP service account found in secrets.toml"
-        creds = Credentials.from_service_account_info(
-            dict(creds_dict),
-            scopes=[
-                "https://spreadsheets.google.com/feeds",
-                "https://www.googleapis.com/auth/drive",
-            ],
-        )
-        gc = gspread.authorize(creds)
-        sh = gc.open_by_url(url)
-        ws = sh.sheet1
-        
-        # Get all column headers
-        headers = ws.row_values(1)
-        
-        # Create row values in correct order
-        row_values = []
-        for col in headers:
-            row_values.append(row_data.get(col, ""))
-        
-        # Append row
-        ws.append_row(row_values)
-        return True, "✅ Row added to Google Sheets!"
-    except Exception as e:
-        return False, f"❌ {e}"
-
-
 def _ensure_sample_transfers():
     """Create sample transfers.xlsx so the app works out of the box."""
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -180,6 +121,19 @@ def _load_transfers(agent_name: str, is_admin: bool):
         return pd.DataFrame(), "❌ No data"
 
 
+def _save_to_local_excel(row_data: dict):
+    """Save a new row to local Excel file."""
+    try:
+        _ensure_sample_transfers()
+        df = pd.read_excel(TRANSFERS_FILE)
+        new_row = pd.DataFrame([row_data])
+        df = pd.concat([df, new_row], ignore_index=True)
+        df.to_excel(TRANSFERS_FILE, index=False)
+        return True, "✅ Transfer added to local Excel!"
+    except Exception as e:
+        return False, f"❌ Error saving to local file: {e}"
+
+
 # ── Main render ───────────────────────────────────────────────────────────────
 
 def render_transfers_tab(user: dict):
@@ -221,6 +175,8 @@ def render_transfers_tab(user: dict):
                 1. Open your Google Sheet → <b>File → Share → Anyone with link → Viewer</b><br>
                 2. Paste the link below → click <b>Save</b><br>
                 3. This will apply to <b>ALL</b> users.
+                <br><br>
+                <span style="color:#FFD166;">⚠️ For writing to Google Sheets, you need to configure GCP Service Account in secrets.toml</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -282,6 +238,7 @@ def render_transfers_tab(user: dict):
                     margin-bottom:0.75rem;">
             Fill in the details below to add a new transfer. 
             <span style="color:#4F6BFF;">Your name will be auto-filled as the Agent.</span>
+            <br><span style="color:#FFD166;">📌 Data will be saved to local Excel file first.</span>
         </div>
         """, unsafe_allow_html=True)
         
@@ -337,29 +294,15 @@ def render_transfers_tab(user: dict):
                         "File": "",
                     }
                     
-                    # Save to Google Sheet if URL is set
-                    sheet_url = get_transfers_sheet_url()
-                    if sheet_url:
-                        success, msg = _append_to_sheets(row_data, sheet_url)
-                        if success:
-                            st.success(f"✅ Transfer added successfully to Google Sheets!")
-                            st.balloons()
-                            _fetch_sheet.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {msg}")
+                    # ✅ Save to local Excel file (always works, no GCP needed)
+                    success, msg = _save_to_local_excel(row_data)
+                    if success:
+                        st.success(f"✅ Transfer added successfully to local Excel!")
+                        st.balloons()
+                        _fetch_sheet.clear()
+                        st.rerun()
                     else:
-                        # Save to local Excel
-                        try:
-                            df = pd.read_excel(TRANSFERS_FILE)
-                            new_row = pd.DataFrame([row_data])
-                            df = pd.concat([df, new_row], ignore_index=True)
-                            df.to_excel(TRANSFERS_FILE, index=False)
-                            st.success("✅ Transfer added successfully to local Excel!")
-                            st.balloons()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Error saving to local file: {e}")
+                        st.error(f"❌ {msg}")
 
     # ── Load data ─────────────────────────────────────────────────────────────
     df, source = _load_transfers(agent_name, is_admin)
@@ -560,13 +503,3 @@ def render_transfers_tab(user: dict):
                 "text/csv",
                 use_container_width=True,
             )
-        with c2:
-            sheet_url_write = get_transfers_sheet_url()
-            if sheet_url_write:
-                if st.button("📤 Push to Google Sheets", key="push_transfers", use_container_width=True):
-                    ok, msg = _push_to_sheets(filtered, sheet_url_write)
-                    st.success(msg) if ok else st.error(msg)
-            else:
-                st.button("📤 Push to Google Sheets", disabled=True,
-                          help="Save a Sheet URL first", use_container_width=True,
-                          key="push_transfers_disabled")
