@@ -1,7 +1,7 @@
 """
 modules/tabs/transfers_tab.py
 Transfers tab — Google Sheets as primary live source with auto-refresh,
-writing directly to the connected Google Sheet.
+writing directly to the connected Google Sheet using Google Apps Script.
 """
 
 import streamlit as st
@@ -202,7 +202,7 @@ def render_transfers_tab(user: dict):
                 2. Paste the link below → click <b>Save</b><br>
                 3. This will apply to <b>ALL</b> users.
                 <br><br>
-                <span style="color:#06D6A0;">✅ Data will be written directly to this Google Sheet.</span>
+                <span style="color:#06D6A0;">✅ Data will be written directly to this Google Sheet using Apps Script.</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -256,6 +256,11 @@ def render_transfers_tab(user: dict):
         if not sheet_url:
             st.warning("⚠️ No Google Sheet connected. Please ask an Admin to set up the Google Sheet URL.")
         
+        # Check if Apps Script is configured
+        apps_script_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+        if not apps_script_url:
+            st.error("⚠️ Google Apps Script not configured. Please add `web_app_url` to secrets.toml")
+        
         with st.form("add_transfer_form"):
             col1, col2 = st.columns(2)
             
@@ -278,6 +283,8 @@ def render_transfers_tab(user: dict):
             if submitted:
                 if not sheet_url:
                     st.error("❌ No Google Sheet connected. Please ask an Admin to set up the Google Sheet URL.")
+                elif not apps_script_url:
+                    st.error("❌ Google Apps Script not configured. Please contact Admin.")
                 elif not customer_name or not address or not phone or not utility_provider or not electricity_bill:
                     st.error("❌ Please fill in all required fields (*).")
                 else:
