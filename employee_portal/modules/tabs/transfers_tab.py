@@ -1,7 +1,7 @@
 """
 modules/tabs/transfers_tab.py
 Transfers tab — Google Sheets as primary live source with auto-refresh,
-Excel fallback for reading only, writing directly to Google Sheets.
+using Google Apps Script for writing data.
 """
 
 import streamlit as st
@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 import random
 
 from modules.database import get_transfers_sheet_url, set_transfers_sheet_url
+from modules.drive_apps_script import append_to_google_sheet_apps_script
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 TRANSFERS_FILE = os.path.join(DATA_DIR, "transfers.xlsx")
@@ -37,43 +38,6 @@ def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
         return df
     except Exception as e:
         return pd.DataFrame()
-
-
-def _append_to_google_sheet(row_data: dict, url: str):
-    """Append a single row to Google Sheet."""
-    try:
-        import gspread
-        from google.oauth2.service_account import Credentials
-        
-        # Check if credentials exist
-        creds_dict = st.secrets.get("gcp_service_account", {})
-        if not creds_dict:
-            return False, "⚠️ Google Sheets not configured. Please add GCP Service Account to secrets.toml"
-        
-        creds = Credentials.from_service_account_info(
-            dict(creds_dict),
-            scopes=[
-                "https://spreadsheets.google.com/feeds",
-                "https://www.googleapis.com/auth/drive",
-            ],
-        )
-        gc = gspread.authorize(creds)
-        sh = gc.open_by_url(url)
-        ws = sh.sheet1
-        
-        # Get all column headers
-        headers = ws.row_values(1)
-        
-        # Create row values in correct order
-        row_values = []
-        for col in headers:
-            row_values.append(row_data.get(col, ""))
-        
-        # Append row
-        ws.append_row(row_values)
-        return True, "✅ Transfer added to Google Sheets!"
-    except Exception as e:
-        return False, f"❌ Error: {str(e)}"
 
 
 def _ensure_sample_transfers():
@@ -199,7 +163,7 @@ def render_transfers_tab(user: dict):
                 2. Paste the link below → click <b>Save</b><br>
                 3. This will apply to <b>ALL</b> users.
                 <br><br>
-                <span style="color:#FFD166;">⚠️ For writing to Google Sheets, you need to configure GCP Service Account in secrets.toml</span>
+                <span style="color:#06D6A0;">✅ Using Google Apps Script for writing data (No GCP needed)</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -303,8 +267,26 @@ def render_transfers_tab(user: dict):
                         "File": "",
                     }
                     
+                    # ✅ Use Apps Script to append to Google Sheets
                     with st.spinner("Saving to Google Sheet..."):
-                        success, msg = _append_to_google_sheet(row_data, sheet_url)
+                        # Check if Apps Script URL is configured
+                        apps_script_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+                        
+                        if apps_script_url:
+                            success, msg = append_to_google_sheet_apps_script(row_data, apps_script_url)
+                        else:
+                            # Fallback: save to local Excel
+                            try:
+                                df = pd.read_excel(TRANSFERS_FILE)
+                                new_row = pd.DataFrame([row_data])
+                                df = pd.concat([df, new_row], ignore_index=True)
+                                df.to_excel(TRANSFERS_FILE, index=False)
+                                success = True
+                                msg = "✅ Transfer added to local Excel! (Apps Script not configured)"
+                            except Exception as e:
+                                success = False
+                                msg = f"❌ Error: {e}"
+                        
                         if success:
                             st.success(msg)
                             st.balloons()
