@@ -9,15 +9,6 @@ from modules.database import (
     add_note, get_notes, get_attendance, get_breaks, get_callbacks
 )
 
-# ✅ التحقق من وجود drive_backup قبل استيراده
-try:
-    from modules.drive_backup import backup_to_google_drive, restore_from_google_drive
-    DRIVE_BACKUP_AVAILABLE = True
-except ImportError:
-    DRIVE_BACKUP_AVAILABLE = False
-    backup_to_google_drive = None
-    restore_from_google_drive = None
-
 _P = "admintab_"
 
 
@@ -33,20 +24,13 @@ def render_admin_tab(user: dict):
         color:#E8EAF0;margin-bottom:1rem;border-left:3px solid #7C3AED;
         padding-left:10px;
     }
-    .backup-card {
-        background: #1A1D27;
-        border: 1px solid #2E3350;
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
-    }
     </style>
     """, unsafe_allow_html=True)
 
     selected = st.radio(
         "Admin Section",
         ["👥 Employees", "➕ Add Employee", "📋 All Attendance",
-         "☕ All Breaks", "📞 All Callbacks", "📝 Add Note", "☁️ Google Drive Backup"],
+         "☕ All Breaks", "📞 All Callbacks", "📝 Add Note"],
         horizontal=True,
         label_visibility="collapsed",
         key=f"{_P}nav"
@@ -66,8 +50,6 @@ def render_admin_tab(user: dict):
         render_all_callbacks_section()
     elif selected == "📝 Add Note":
         render_add_note_section(user)
-    elif selected == "☁️ Google Drive Backup":
-        render_google_drive_backup_section()
 
 
 def render_employees_section():
@@ -226,26 +208,3 @@ def render_add_note_section(user):
                         <div style="color:#C8CADE;font-size:0.85rem;margin-top:4px">
                             {n['note']}</div>
                     </div>""", unsafe_allow_html=True)
-
-
-def render_google_drive_backup_section():
-    """Render Google Drive backup section."""
-    st.markdown('<div class="sec-title">☁️ Google Drive Backup</div>', unsafe_allow_html=True)
-    
-    # ✅ التحقق من توفر الـ Backup
-    if not DRIVE_BACKUP_AVAILABLE:
-        st.error("❌ Google Drive backup module not available. Please check if `drive_backup.py` exists.")
-        return
-    
-    # Check if backup URL is configured
-    backup_url = st.secrets.get("drive_apps_script", {}).get("backup_url", None)
-    if not backup_url:
-        st.warning("""
-        ⚠️ Google Drive backup is not configured.
-        
-        Please add to `.streamlit/secrets.toml`:
-        
-        ```toml
-        [drive_apps_script]
-        transfers_url = "https://script.google.com/macros/s/.../exec"
-        backup_url = "https://script.google.com/macros/s/.../exec"
