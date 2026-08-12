@@ -150,21 +150,6 @@ def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id          SERIAL PRIMARY KEY,
-                sender_id   TEXT NOT NULL,
-                sender_name TEXT NOT NULL,
-                sender_role TEXT NOT NULL,
-                receiver_id  TEXT NOT NULL,
-                receiver_name TEXT NOT NULL,
-                subject     TEXT NOT NULL,
-                message     TEXT NOT NULL,
-                is_read     INTEGER DEFAULT 0,
-                created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-                parent_id   INTEGER DEFAULT NULL
-            )
-        """)
     else:
         # SQLite
         c.execute("""
@@ -235,21 +220,6 @@ def init_db():
                 key TEXT PRIMARY KEY,
                 value TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender_id   TEXT NOT NULL,
-                sender_name TEXT NOT NULL,
-                sender_role TEXT NOT NULL,
-                receiver_id  TEXT NOT NULL,
-                receiver_name TEXT NOT NULL,
-                subject     TEXT NOT NULL,
-                message     TEXT NOT NULL,
-                is_read     INTEGER DEFAULT 0,
-                created_at  TEXT DEFAULT (datetime('now')),
-                parent_id   INTEGER DEFAULT NULL
             )
         """)
 
@@ -631,86 +601,15 @@ def set_timezone(hours: int, minutes: int):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  Messages (Internal Messaging System)
+#  Transfers Sheet URL (System Setting)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def send_message(sender_id, sender_name, sender_role, receiver_id, receiver_name, subject, message, parent_id=None):
-    """Send a new message."""
-    conn, engine = get_conn()
-    c = conn.cursor()
-    
-    c.execute(_q("""
-        INSERT INTO messages (sender_id, sender_name, sender_role, receiver_id, receiver_name, subject, message, parent_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, engine), (sender_id, sender_name, sender_role, receiver_id, receiver_name, subject, message, parent_id))
-    
-    conn.commit()
-    conn.close()
-    return True
+def get_transfers_sheet_url():
+    """Get transfers Google Sheet URL from database."""
+    url = get_system_setting("transfers_sheet_url", "")
+    return url
 
 
-def get_messages_for_user(employee_id):
-    """Get all messages for a specific user (received and sent)."""
-    conn, engine = get_conn()
-    c = conn.cursor()
-    
-    c.execute(_q("""
-        SELECT * FROM messages 
-        WHERE receiver_id = ? OR sender_id = ?
-        ORDER BY created_at DESC
-    """, engine), (employee_id, employee_id))
-    
-    rows = _fetchall(c)
-    conn.close()
-    return rows
-
-
-def get_unread_count(employee_id):
-    """Get count of unread messages for a user."""
-    conn, engine = get_conn()
-    c = conn.cursor()
-    
-    c.execute(_q("""
-        SELECT COUNT(*) as count FROM messages 
-        WHERE receiver_id = ? AND is_read = 0
-    """, engine), (employee_id,))
-    
-    row = _fetchone(c)
-    conn.close()
-    return row["count"] if row else 0
-
-
-def mark_message_as_read(message_id):
-    """Mark a message as read."""
-    conn, engine = get_conn()
-    c = conn.cursor()
-    
-    c.execute(_q("UPDATE messages SET is_read = 1 WHERE id = ?", engine), (message_id,))
-    conn.commit()
-    conn.close()
-
-
-def delete_message(message_id):
-    """Delete a message."""
-    conn, engine = get_conn()
-    c = conn.cursor()
-    
-    c.execute(_q("DELETE FROM messages WHERE id = ?", engine), (message_id,))
-    conn.commit()
-    conn.close()
-
-
-def get_conversation(parent_id):
-    """Get all messages in a conversation thread."""
-    conn, engine = get_conn()
-    c = conn.cursor()
-    
-    c.execute(_q("""
-        SELECT * FROM messages 
-        WHERE id = ? OR parent_id = ?
-        ORDER BY created_at ASC
-    """, engine), (parent_id, parent_id))
-    
-    rows = _fetchall(c)
-    conn.close()
-    return rows
+def set_transfers_sheet_url(url: str):
+    """Save transfers Google Sheet URL to database."""
+    set_system_setting("transfers_sheet_url", url)
