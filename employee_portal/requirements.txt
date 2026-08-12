@@ -8,4 +8,3 @@ psycopg2-binary>=2.9.0
 gspread>=6.0.0
 google-auth>=2.0.0
 fpdf2>=2.7.4
-secure-smtplib>=0.1.1
