@@ -1,29 +1,36 @@
 """
 modules/tabs/sales_tab.py
-Sales tab — Google Sheets as primary live source with auto-refresh,
+Transfers tab — Google Sheets as primary live source with auto-refresh,
 Excel fallback, all charts update from whatever source is active.
 """
 
 import streamlit as st
 import pandas as pd
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-DATA_DIR   = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-SALES_FILE = os.path.join(DATA_DIR, "sales.xlsx")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+TRANSFERS_FILE = os.path.join(DATA_DIR, "transfers.xlsx")
 
 LOGO = "https://plain-eeur-prod-public.komododecks.com/202608/09/cTbwjWfVAMvKzMZ4n8ET/image.png"
+
+# ── Expected columns for transfers ────────────────────────────────────────────
+EXPECTED_COLUMNS = [
+    "Timestamp", "Agent Name", "Customer Name", "Address", "Phone Number",
+    "Electric Bill", "Utility Provider", "Credit Score", "Email", "Transfer to",
+    "Campaign", "Customer Name", "Customer phone number", "Address", "Email",
+    "Roof Type", "Age of Roof", "Status", "FeedBack", "H comments", "File"
+]
 
 
 # ── Google Sheets helpers ─────────────────────────────────────────────────────
 
-@st.cache_data(ttl=60)   # cache for 60 s so charts don't re-fetch on every widget touch
+@st.cache_data(ttl=60)
 def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
     """Download a public Google Sheet as CSV and return a DataFrame."""
     try:
         if "/d/" in sheet_url:
             sheet_id = sheet_url.split("/d/")[1].split("/")[0]
-            # try to get gid (tab id) if present
             gid = "0"
             if "gid=" in sheet_url:
                 gid = sheet_url.split("gid=")[1].split("&")[0].split("#")[0]
@@ -32,7 +39,7 @@ def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
                 f"/export?format=csv&gid={gid}"
             )
         else:
-            csv_url = sheet_url   # already a direct CSV URL
+            csv_url = sheet_url
         df = pd.read_csv(csv_url)
         return df
     except Exception as e:
@@ -54,9 +61,9 @@ def _push_to_sheets(df: pd.DataFrame, url: str):
                 "https://www.googleapis.com/auth/drive",
             ],
         )
-        gc  = gspread.authorize(creds)
-        sh  = gc.open_by_url(url)
-        ws  = sh.sheet1
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_url(url)
+        ws = sh.sheet1
         ws.clear()
         ws.update([df.columns.tolist()] + df.fillna("").astype(str).values.tolist())
         return True, "✅ Synced to Google Sheets!"
@@ -64,60 +71,78 @@ def _push_to_sheets(df: pd.DataFrame, url: str):
         return False, f"❌ {e}"
 
 
-def _ensure_sample_sales():
-    """Create sample sales.xlsx so the app works out of the box."""
+def _ensure_sample_transfers():
+    """Create sample transfers.xlsx so the app works out of the box."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(SALES_FILE):
+    if not os.path.exists(TRANSFERS_FILE):
         import random
         rows = []
-        products = ["Product A", "Product B", "Product C", "Service X", "Service Y"]
-        emp_ids  = ["EMP-001", "EMP-002"]
-        statuses = ["Completed", "Pending", "Cancelled"]
+        agents = ["John Smith", "Sara Johnson", "Mike Wilson", "Emma Davis"]
+        customers = ["Ahmed Hassan", "Mona Ibrahim", "Khaled Ali", "Nadia Samir", "Omar Farouk", 
+                     "Layla Mahmoud", "Youssef Karim", "Hana Nasser", "Karim Adel", "Sara Tarek"]
+        statuses = ["New", "Contacted", "Qualified", "Closed", "Lost"]
+        campaigns = ["Campaign A", "Campaign B", "Campaign C"]
+        
         today = date.today()
-        for i in range(90):
+        for i in range(30):
             d = today - timedelta(days=i)
-            for emp in emp_ids:
-                if random.random() > 0.3:
+            for agent in agents[:2]:
+                if random.random() > 0.4:
                     rows.append({
-                        "Date":        d.strftime("%Y-%m-%d"),
-                        "Employee_ID": emp,
-                        "Product":     random.choice(products),
-                        "Amount":      random.randint(1, 20),
-                        "Revenue":     round(random.uniform(500, 5000), 2),
-                        "Status":      random.choice(statuses),
+                        "Timestamp": d.strftime("%Y-%m-%d"),
+                        "Agent Name": agent,
+                        "Customer Name": random.choice(customers),
+                        "Address": f"{random.randint(10, 999)} Main St, City",
+                        "Phone Number": f"01{random.randint(0, 9)}{random.randint(10000000, 99999999)}",
+                        "Electric Bill": f"{random.randint(50, 500)}",
+                        "Utility Provider": random.choice(["Provider A", "Provider B", "Provider C"]),
+                        "Credit Score": random.randint(300, 850),
+                        "Email": f"customer{random.randint(1, 100)}@email.com",
+                        "Transfer to": random.choice(["Company A", "Company B", "Company C"]),
+                        "Campaign": random.choice(campaigns),
+                        "Customer Name": random.choice(customers),
+                        "Customer phone number": f"01{random.randint(0, 9)}{random.randint(10000000, 99999999)}",
+                        "Address": f"{random.randint(10, 999)} Main St, City",
+                        "Email": f"customer{random.randint(1, 100)}@email.com",
+                        "Roof Type": random.choice(["Flat", "Pitched", "Tile", "Metal"]),
+                        "Age of Roof": random.randint(1, 30),
+                        "Status": random.choice(statuses),
+                        "FeedBack": random.choice(["", "Good lead", "Not interested", "Follow up needed"]),
+                        "H comments": random.choice(["", "Call back", "Send email", "Schedule meeting"]),
+                        "File": "",
                     })
-        pd.DataFrame(rows).to_excel(SALES_FILE, index=False)
+        pd.DataFrame(rows).to_excel(TRANSFERS_FILE, index=False)
 
 
-def _load_sales(employee_id: str, is_admin: bool):
+def _load_transfers(agent_name: str, is_admin: bool):
     """
-    Load sales data — Google Sheets if URL is set, otherwise Excel.
+    Load transfers data — Google Sheets if URL is set, otherwise Excel.
     Returns (DataFrame, source_label).
     """
-    sheet_url = st.session_state.get("sales_sheet_url", "").strip()
+    sheet_url = st.session_state.get("transfers_sheet_url", "").strip()
 
     if sheet_url:
         df = _fetch_sheet(sheet_url)
         if not df.empty:
             df.columns = [c.strip() for c in df.columns]
-            if "Date" in df.columns:
-                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-            if not is_admin and "Employee_ID" in df.columns:
-                df = df[df["Employee_ID"] == employee_id]
+            if "Timestamp" in df.columns:
+                df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
+            if not is_admin and "Agent Name" in df.columns:
+                df = df[df["Agent Name"] == agent_name]
             return df, "🟢 Google Sheets (live)"
 
     # Fallback → local Excel
-    _ensure_sample_sales()
+    _ensure_sample_transfers()
     try:
-        df = pd.read_excel(SALES_FILE)
+        df = pd.read_excel(TRANSFERS_FILE)
         df.columns = [c.strip() for c in df.columns]
-        if "Date" in df.columns:
-            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        if not is_admin and "Employee_ID" in df.columns:
-            df = df[df["Employee_ID"] == employee_id]
+        if "Timestamp" in df.columns:
+            df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
+        if not is_admin and "Agent Name" in df.columns:
+            df = df[df["Agent Name"] == agent_name]
         return df, "🟡 Local Excel (upload or connect a Sheet)"
     except Exception as e:
-        st.error(f"Error reading sales data: {e}")
+        st.error(f"Error reading transfers data: {e}")
         return pd.DataFrame(), "❌ No data"
 
 
@@ -125,6 +150,7 @@ def _load_sales(employee_id: str, is_admin: bool):
 
 def render_sales_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
+    agent_name = user.get("full_name", "")
 
     # ── Google Sheets config panel ────────────────────────────────────────────
     with st.expander("🔗 Google Sheets Integration", expanded=False):
@@ -135,8 +161,7 @@ def render_sales_tab(user: dict):
             <strong style="color:#E8EAF0">How to connect:</strong><br>
             1. Open your Google Sheet → <b>File → Share → Anyone with link → Viewer</b><br>
             2. Paste the link below → click <b>Save & Sync</b><br>
-            3. Charts and table update automatically every 60 seconds.<br>
-            <span style="color:#4F6BFF">To also <b>push</b> data back, add a service account to secrets.toml.</span>
+            3. Charts and table update automatically every 60 seconds.
         </div>
         """, unsafe_allow_html=True)
 
@@ -144,37 +169,39 @@ def render_sales_tab(user: dict):
         with col_url:
             sheet_url_input = st.text_input(
                 "Sheet URL",
-                value=st.session_state.get("sales_sheet_url", ""),
+                value=st.session_state.get("transfers_sheet_url", ""),
                 placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit",
                 label_visibility="collapsed",
-                key="sales_sheet_input",
+                key="transfers_sheet_input",
             )
         with col_save:
-            if st.button("💾 Save", key="save_sales_url", use_container_width=True):
-                st.session_state.sales_sheet_url = sheet_url_input.strip()
-                _fetch_sheet.clear()          # bust cache so next load is fresh
+            if st.button("💾 Save", key="save_transfers_url", use_container_width=True):
+                st.session_state.transfers_sheet_url = sheet_url_input.strip()
+                _fetch_sheet.clear()
                 st.success("Saved!")
                 st.rerun()
         with col_refresh:
-            if st.button("🔄 Refresh", key="refresh_sales", use_container_width=True):
+            if st.button("🔄 Refresh", key="refresh_transfers", use_container_width=True):
                 _fetch_sheet.clear()
                 st.rerun()
 
     # ── Upload fallback ───────────────────────────────────────────────────────
-    with st.expander("📂 Upload sales.xlsx (local fallback)", expanded=False):
-        uploaded = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="sales_upload")
+    with st.expander("📂 Upload transfers.xlsx (local fallback)", expanded=False):
+        uploaded = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="transfers_upload")
         if uploaded:
             os.makedirs(DATA_DIR, exist_ok=True)
-            with open(SALES_FILE, "wb") as f:
+            with open(TRANSFERS_FILE, "wb") as f:
                 f.write(uploaded.read())
-            st.success("sales.xlsx updated!")
+            st.success("transfers.xlsx updated!")
             st.rerun()
         st.markdown("""
-        **Expected columns:** `Date` · `Employee_ID` · `Product` · `Amount` · `Revenue` · `Status`
+        **Expected columns:** Timestamp, Agent Name, Customer Name, Address, Phone Number,
+        Electric Bill, Utility Provider, Credit Score, Email, Transfer to, Campaign,
+        Customer Name, Customer phone number, Address, Email, Roof Type, Age of Roof, Status, FeedBack, H comments, File
         """)
 
     # ── Load data ─────────────────────────────────────────────────────────────
-    df, source = _load_sales(user.get("employee_id", ""), is_admin)
+    df, source = _load_transfers(agent_name, is_admin)
 
     col_src, col_ts = st.columns([3, 1])
     with col_src:
@@ -183,7 +210,7 @@ def render_sales_tab(user: dict):
         st.caption(f"As of: {pd.Timestamp.now().strftime('%H:%M:%S')}")
 
     if df.empty:
-        st.info("No sales data found. Connect a Google Sheet or upload sales.xlsx.")
+        st.info("No transfers data found. Connect a Google Sheet or upload transfers.xlsx.")
         return
 
     # ── Filters ───────────────────────────────────────────────────────────────
@@ -192,80 +219,77 @@ def render_sales_tab(user: dict):
 
     with col1:
         period = st.selectbox(
-            "Period", ["All Time", "Today", "This Week", "This Month"], key="sales_period"
+            "Period", ["All Time", "Today", "This Week", "This Month"], key="transfers_period"
         )
     with col2:
-        products = ["All"] + sorted(df["Product"].dropna().unique().tolist()) \
-            if "Product" in df.columns else ["All"]
-        prod_filter = st.selectbox("Product", products, key="sales_prod")
+        statuses = ["All"] + sorted(df["Status"].dropna().unique().tolist()) if "Status" in df.columns else ["All"]
+        status_filter = st.selectbox("Status", statuses, key="transfers_status")
     with col3:
-        statuses = ["All"] + sorted(df["Status"].dropna().unique().tolist()) \
-            if "Status" in df.columns else ["All"]
-        stat_filter = st.selectbox("Status", statuses, key="sales_stat")
+        agents = ["All"] + sorted(df["Agent Name"].dropna().unique().tolist()) if "Agent Name" in df.columns else ["All"]
+        agent_filter = st.selectbox("Agent", agents, key="transfers_agent")
     with col4:
-        search = st.text_input("🔍 Search", placeholder="Product or Employee…",
-                               key="sales_search")
+        search = st.text_input("🔍 Search", placeholder="Customer, phone, address...", key="transfers_search")
 
     # Apply filters
     filtered = df.copy()
-    if "Date" in filtered.columns:
+    if "Timestamp" in filtered.columns:
         if period == "Today":
-            filtered = filtered[filtered["Date"].dt.date == today]
+            filtered = filtered[filtered["Timestamp"].dt.date == today]
         elif period == "This Week":
-            filtered = filtered[
-                filtered["Date"].dt.date >= today - timedelta(days=today.weekday())]
+            filtered = filtered[filtered["Timestamp"].dt.date >= today - timedelta(days=today.weekday())]
         elif period == "This Month":
-            filtered = filtered[filtered["Date"].dt.date >= today.replace(day=1)]
+            filtered = filtered[filtered["Timestamp"].dt.date >= today.replace(day=1)]
 
-    if prod_filter != "All" and "Product" in filtered.columns:
-        filtered = filtered[filtered["Product"] == prod_filter]
-    if stat_filter != "All" and "Status" in filtered.columns:
-        filtered = filtered[filtered["Status"] == stat_filter]
+    if status_filter != "All" and "Status" in filtered.columns:
+        filtered = filtered[filtered["Status"] == status_filter]
+    if agent_filter != "All" and "Agent Name" in filtered.columns:
+        filtered = filtered[filtered["Agent Name"] == agent_filter]
     if search:
         mask = pd.Series(False, index=filtered.index)
-        for col in ["Product", "Employee_ID", "Status"]:
+        search_cols = ["Customer Name", "Phone Number", "Address", "Email", "Agent Name"]
+        for col in search_cols:
             if col in filtered.columns:
                 mask |= filtered[col].astype(str).str.contains(search, case=False, na=False)
         filtered = filtered[mask]
 
     # ── KPI cards ─────────────────────────────────────────────────────────────
-    rev_col = "Revenue" if "Revenue" in filtered.columns else None
-    amt_col = "Amount"  if "Amount"  in filtered.columns else None
+    total_transfers = len(filtered)
+    total_agents = filtered["Agent Name"].nunique() if "Agent Name" in filtered.columns else 0
+    
+    status_counts = {}
+    if "Status" in filtered.columns:
+        status_counts = filtered["Status"].value_counts().to_dict()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📊 Total Transfers", total_transfers)
+    with col2:
+        st.metric("👤 Agents", total_agents)
+    with col3:
+        st.metric("📌 New", status_counts.get("New", 0))
+    with col4:
+        st.metric("✅ Closed", status_counts.get("Closed", 0))
 
-    total_rev  = filtered[rev_col].sum()          if rev_col and not filtered.empty else 0
-    total_sales = len(filtered)
-    completed  = len(filtered[filtered["Status"] == "Completed"]) \
-        if "Status" in filtered.columns else 0
-    avg_rev    = filtered[rev_col].mean()          if rev_col and not filtered.empty else 0
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("Total Revenue",  f"${total_rev:,.2f}")
-    with c2: st.metric("Total Sales",    total_sales)
-    with c3: st.metric("Completed",      completed)
-    with c4: st.metric("Avg Revenue",    f"${avg_rev:,.2f}")
-
-    # ── Charts (all built from `filtered` so they react to sheet + filters) ───
+    # ── Charts ─────────────────────────────────────────────────────────────────
     try:
         import plotly.express as px
 
-        if "Date" in filtered.columns and rev_col and not filtered.empty:
+        if "Timestamp" in filtered.columns and not filtered.empty:
 
-            # Row 1: Line trend + Pie status
             col_l, col_r = st.columns(2)
 
             with col_l:
                 daily = (
-                    filtered.groupby(filtered["Date"].dt.date)[rev_col]
-                    .sum()
-                    .reset_index()
+                    filtered.groupby(filtered["Timestamp"].dt.date)
+                    .size()
+                    .reset_index(name="count")
                 )
-                daily.columns = ["Date", "Revenue"]
+                daily.columns = ["Date", "Count"]
                 daily = daily.sort_values("Date")
-                fig = px.line(
-                    daily, x="Date", y="Revenue",
-                    title="📈 Revenue Trend",
+                fig = px.bar(
+                    daily, x="Date", y="Count",
+                    title="📈 Transfers Trend",
                     template="plotly_dark",
-                    markers=True,
                     color_discrete_sequence=["#4F6BFF"],
                 )
                 fig.update_layout(
@@ -274,7 +298,6 @@ def render_sales_tab(user: dict):
                     margin=dict(l=10, r=10, t=45, b=10),
                     title_font_size=13,
                 )
-                fig.update_traces(line_width=2.5)
                 st.plotly_chart(fig, use_container_width=True)
 
             with col_r:
@@ -283,9 +306,9 @@ def render_sales_tab(user: dict):
                     sc.columns = ["Status", "Count"]
                     fig2 = px.pie(
                         sc, values="Count", names="Status",
-                        title="🥧 Sales by Status",
+                        title="🥧 Transfers by Status",
                         template="plotly_dark",
-                        color_discrete_sequence=["#4F6BFF", "#7C3AED", "#06D6A0", "#FF6B6B"],
+                        color_discrete_sequence=["#4F6BFF", "#7C3AED", "#06D6A0", "#FF6B6B", "#FFD166"],
                     )
                     fig2.update_layout(
                         paper_bgcolor="#1A1D27", font_color="#C8CADE",
@@ -294,74 +317,71 @@ def render_sales_tab(user: dict):
                     )
                     st.plotly_chart(fig2, use_container_width=True)
 
-            # Row 2: Monthly bar + Product bar (if enough data)
+            # Row 2: Agent performance + Utility Provider
             col_l2, col_r2 = st.columns(2)
 
             with col_l2:
-                monthly = (
-                    filtered.groupby(filtered["Date"].dt.to_period("M"))[rev_col]
-                    .sum()
-                    .reset_index()
-                )
-                monthly["Date"] = monthly["Date"].astype(str)
-                fig3 = px.bar(
-                    monthly, x="Date", y=rev_col,
-                    title="📅 Monthly Revenue",
-                    template="plotly_dark",
-                    color_discrete_sequence=["#7C3AED"],
-                )
-                fig3.update_layout(
-                    paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                    font_color="#C8CADE",
-                    margin=dict(l=10, r=10, t=45, b=10),
-                    title_font_size=13,
-                )
-                st.plotly_chart(fig3, use_container_width=True)
-
-            with col_r2:
-                if "Product" in filtered.columns:
-                    by_prod = (
-                        filtered.groupby("Product")[rev_col]
-                        .sum()
-                        .reset_index()
-                        .sort_values(rev_col, ascending=False)
+                if "Agent Name" in filtered.columns:
+                    by_agent = (
+                        filtered.groupby("Agent Name")
+                        .size()
+                        .reset_index(name="count")
+                        .sort_values("count", ascending=False)
                         .head(10)
                     )
-                    fig4 = px.bar(
-                        by_prod, x=rev_col, y="Product",
+                    fig3 = px.bar(
+                        by_agent, x="count", y="Agent Name",
                         orientation="h",
-                        title="🏆 Revenue by Product",
+                        title="👤 Transfers by Agent",
                         template="plotly_dark",
-                        color_discrete_sequence=["#06D6A0"],
+                        color_discrete_sequence=["#7C3AED"],
                     )
-                    fig4.update_layout(
+                    fig3.update_layout(
                         paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
                         font_color="#C8CADE",
                         margin=dict(l=10, r=10, t=45, b=10),
                         title_font_size=13,
                         yaxis=dict(autorange="reversed"),
                     )
-                    st.plotly_chart(fig4, use_container_width=True)
+                    st.plotly_chart(fig3, use_container_width=True)
 
-        else:
-            st.info("Not enough date/revenue data to draw charts.")
+            with col_r2:
+                if "Utility Provider" in filtered.columns:
+                    by_provider = (
+                        filtered.groupby("Utility Provider")
+                        .size()
+                        .reset_index(name="count")
+                        .sort_values("count", ascending=False)
+                        .head(10)
+                    )
+                    fig4 = px.pie(
+                        by_provider, values="count", names="Utility Provider",
+                        title="⚡ Utility Provider Distribution",
+                        template="plotly_dark",
+                        color_discrete_sequence=["#06D6A0", "#4F6BFF", "#7C3AED", "#FF9F43"],
+                    )
+                    fig4.update_layout(
+                        paper_bgcolor="#1A1D27", font_color="#C8CADE",
+                        margin=dict(l=10, r=10, t=45, b=10),
+                        title_font_size=13,
+                    )
+                    st.plotly_chart(fig4, use_container_width=True)
 
     except ImportError:
         st.info("Install plotly for charts: `pip install plotly`")
 
     # ── Table ─────────────────────────────────────────────────────────────────
-    st.markdown("#### 📋 Sales Records")
-    sort_options = filtered.columns.tolist()
-    col_sort, col_asc = st.columns([3, 1])
-    with col_sort:
-        sort_col = st.selectbox("Sort by", sort_options, key="sales_sort")
-    with col_asc:
-        asc = st.checkbox("Ascending", value=False, key="sales_asc")
-
-    if sort_col:
-        filtered = filtered.sort_values(sort_col, ascending=asc)
-
-    st.dataframe(filtered.reset_index(drop=True), use_container_width=True, height=340)
+    st.markdown("#### 📋 Transfers Records")
+    
+    # Select columns to show
+    show_cols = ["Timestamp", "Agent Name", "Customer Name", "Phone Number", "Address", 
+                 "Electric Bill", "Utility Provider", "Status"]
+    available_cols = [c for c in show_cols if c in filtered.columns]
+    
+    if available_cols:
+        st.dataframe(filtered[available_cols].reset_index(drop=True), use_container_width=True, height=340)
+    else:
+        st.dataframe(filtered.reset_index(drop=True), use_container_width=True, height=340)
 
     # ── Export (admin only) ───────────────────────────────────────────────────
     if is_admin:
@@ -370,18 +390,17 @@ def render_sales_tab(user: dict):
             st.download_button(
                 "⬇️ Export to CSV",
                 filtered.to_csv(index=False).encode(),
-                "sales_export.csv",
+                "transfers_export.csv",
                 "text/csv",
                 use_container_width=True,
             )
         with c2:
-            sheet_url_write = st.session_state.get("sales_sheet_url", "").strip()
+            sheet_url_write = st.session_state.get("transfers_sheet_url", "").strip()
             if sheet_url_write:
-                if st.button("📤 Push to Google Sheets", key="push_sales",
-                             use_container_width=True):
+                if st.button("📤 Push to Google Sheets", key="push_transfers", use_container_width=True):
                     ok, msg = _push_to_sheets(filtered, sheet_url_write)
                     st.success(msg) if ok else st.error(msg)
             else:
                 st.button("📤 Push to Google Sheets", disabled=True,
                           help="Save a Sheet URL first", use_container_width=True,
-                          key="push_sales_disabled")
+                          key="push_transfers_disabled")
