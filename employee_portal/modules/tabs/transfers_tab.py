@@ -40,7 +40,7 @@ def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
 
 
 def _push_to_sheets(df: pd.DataFrame, url: str):
-    """Write DataFrame back to a Google Sheet (needs service account in secrets)."""
+    """Write DataFrame back to a Google Sheet."""
     try:
         import gspread
         from google.oauth2.service_account import Credentials
@@ -60,6 +60,40 @@ def _push_to_sheets(df: pd.DataFrame, url: str):
         ws.clear()
         ws.update([df.columns.tolist()] + df.fillna("").astype(str).values.tolist())
         return True, "✅ Synced to Google Sheets!"
+    except Exception as e:
+        return False, f"❌ {e}"
+
+
+def _append_to_sheets(row_data: dict, url: str):
+    """Append a single row to Google Sheet."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        creds_dict = st.secrets.get("gcp_service_account", {})
+        if not creds_dict:
+            return False, "No GCP service account found in secrets.toml"
+        creds = Credentials.from_service_account_info(
+            dict(creds_dict),
+            scopes=[
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/drive",
+            ],
+        )
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_url(url)
+        ws = sh.sheet1
+        
+        # Get all column headers
+        headers = ws.row_values(1)
+        
+        # Create row values in correct order
+        row_values = []
+        for col in headers:
+            row_values.append(row_data.get(col, ""))
+        
+        # Append row
+        ws.append_row(row_values)
+        return True, "✅ Row added to Google Sheets!"
     except Exception as e:
         return False, f"❌ {e}"
 
@@ -151,6 +185,7 @@ def _load_transfers(agent_name: str, is_admin: bool):
 def render_transfers_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     agent_name = user.get("full_name", "")
+    agent_id = user.get("employee_id", "")
 
     st.markdown("""
     <style>
@@ -238,6 +273,93 @@ def render_transfers_tab(user: dict):
             Electric Bill, Utility Provider, Credit Score, Email, Transfer to, Campaign,
             Customer Name 2, Customer phone number, Address 2, Email 2, Roof Type, Age of Roof, Status, FeedBack, H comments, File
             """)
+
+    # ── Add Transfer Form (ALL USERS) ──────────────────────────────────────────
+    with st.expander("➕ Add New Transfer", expanded=False):
+        st.markdown("""
+        <div style="background:rgba(79,107,255,0.08);border:1px solid rgba(79,107,255,0.2);
+                    border-radius:10px;padding:0.75rem 1rem;font-size:0.83rem;color:#8B90A8;
+                    margin-bottom:0.75rem;">
+            Fill in the details below to add a new transfer. 
+            <span style="color:#4F6BFF;">Your name will be auto-filled as the Agent.</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.form("add_transfer_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                customer_name = st.text_input("Customer Name *", placeholder="Enter customer full name")
+                address = st.text_input("Address *", placeholder="Enter customer address")
+                phone = st.text_input("Phone Number *", placeholder="Enter phone number")
+                email = st.text_input("Email", placeholder="Enter email address")
+            
+            with col2:
+                utility_provider = st.text_input("Utility Provider *", placeholder="e.g., Provider A")
+                electricity_bill = st.text_input("Electricity Bill *", placeholder="Enter bill amount")
+                credit_score = st.text_input("Credit Score", placeholder="Enter credit score (300-850)")
+                status = st.selectbox("Status", ["New", "Contacted", "Qualified", "Closed", "Lost"])
+            
+            # Hidden/auto fields
+            st.caption(f"👤 Agent: {agent_name} (auto-assigned)")
+            
+            # Submit button
+            submitted = st.form_submit_button("📤 Add Transfer", use_container_width=True, type="primary")
+            
+            if submitted:
+                # Validate required fields
+                if not customer_name or not address or not phone or not utility_provider or not electricity_bill:
+                    st.error("❌ Please fill in all required fields (*).")
+                else:
+                    # Prepare row data
+                    now = datetime.now()
+                    row_data = {
+                        "Timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Agent Name": agent_name,
+                        "Customer Name": customer_name,
+                        "Address": address,
+                        "Phone Number": phone,
+                        "Electric Bill": electricity_bill,
+                        "Utility Provider": utility_provider,
+                        "Credit Score": credit_score if credit_score else "",
+                        "Email": email if email else "",
+                        "Transfer to": "",
+                        "Campaign": "",
+                        "Customer Name 2": "",
+                        "Customer phone number": "",
+                        "Address 2": "",
+                        "Email 2": "",
+                        "Roof Type": "",
+                        "Age of Roof": "",
+                        "Status": status,
+                        "FeedBack": "",
+                        "H comments": "",
+                        "File": "",
+                    }
+                    
+                    # Save to Google Sheet if URL is set
+                    sheet_url = get_transfers_sheet_url()
+                    if sheet_url:
+                        success, msg = _append_to_sheets(row_data, sheet_url)
+                        if success:
+                            st.success(f"✅ Transfer added successfully to Google Sheets!")
+                            st.balloons()
+                            _fetch_sheet.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
+                    else:
+                        # Save to local Excel
+                        try:
+                            df = pd.read_excel(TRANSFERS_FILE)
+                            new_row = pd.DataFrame([row_data])
+                            df = pd.concat([df, new_row], ignore_index=True)
+                            df.to_excel(TRANSFERS_FILE, index=False)
+                            st.success("✅ Transfer added successfully to local Excel!")
+                            st.balloons()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error saving to local file: {e}")
 
     # ── Load data ─────────────────────────────────────────────────────────────
     df, source = _load_transfers(agent_name, is_admin)
