@@ -10,6 +10,8 @@ import os
 from datetime import date, datetime, timedelta
 import random
 
+from modules.database import get_transfers_sheet_url, set_transfers_sheet_url
+
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 TRANSFERS_FILE = os.path.join(DATA_DIR, "transfers.xlsx")
 
@@ -66,7 +68,6 @@ def _ensure_sample_transfers():
     """Create sample transfers.xlsx so the app works out of the box."""
     os.makedirs(DATA_DIR, exist_ok=True)
     
-    # لو الملف موجود، متعمليش حاجة
     if os.path.exists(TRANSFERS_FILE):
         return
     
@@ -117,10 +118,9 @@ def _load_transfers(agent_name: str, is_admin: bool):
     Load transfers data — Google Sheets if URL is set, otherwise Excel.
     Returns (DataFrame, source_label).
     """
-    # تأكدي من وجود ملف sample
     _ensure_sample_transfers()
     
-    sheet_url = st.session_state.get("transfers_sheet_url", "").strip()
+    sheet_url = get_transfers_sheet_url()
 
     if sheet_url:
         df = _fetch_sheet(sheet_url)
@@ -175,53 +175,69 @@ def render_transfers_tab(user: dict):
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Google Sheets config panel ────────────────────────────────────────────
-    with st.expander("🔗 Google Sheets Integration", expanded=False):
-        st.markdown("""
-        <div style="background:rgba(79,107,255,0.08);border:1px solid rgba(79,107,255,0.2);
-                    border-radius:10px;padding:0.75rem 1rem;font-size:0.83rem;color:#8B90A8;
-                    margin-bottom:0.75rem;line-height:1.7">
-            <strong style="color:#E8EAF0">How to connect:</strong><br>
-            1. Open your Google Sheet → <b>File → Share → Anyone with link → Viewer</b><br>
-            2. Paste the link below → click <b>Save & Sync</b><br>
-            3. Charts and table update automatically every 60 seconds.
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Google Sheets config panel (ADMIN ONLY) ──────────────────────────────
+    if is_admin:
+        with st.expander("🔗 Google Sheets Integration (Admin Only)", expanded=False):
+            st.markdown("""
+            <div style="background:rgba(79,107,255,0.08);border:1px solid rgba(79,107,255,0.2);
+                        border-radius:10px;padding:0.75rem 1rem;font-size:0.83rem;color:#8B90A8;
+                        margin-bottom:0.75rem;line-height:1.7">
+                <strong style="color:#E8EAF0">How to connect:</strong><br>
+                1. Open your Google Sheet → <b>File → Share → Anyone with link → Viewer</b><br>
+                2. Paste the link below → click <b>Save</b><br>
+                3. This will apply to <b>ALL</b> users.
+            </div>
+            """, unsafe_allow_html=True)
 
-        col_url, col_save, col_refresh = st.columns([5, 1, 1])
-        with col_url:
-            sheet_url_input = st.text_input(
-                "Sheet URL",
-                value=st.session_state.get("transfers_sheet_url", ""),
-                placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit",
-                label_visibility="collapsed",
-                key="transfers_sheet_input",
-            )
-        with col_save:
-            if st.button("💾 Save", key="save_transfers_url", use_container_width=True):
-                st.session_state.transfers_sheet_url = sheet_url_input.strip()
-                _fetch_sheet.clear()
-                st.success("Saved!")
-                st.rerun()
-        with col_refresh:
-            if st.button("🔄 Refresh", key="refresh_transfers", use_container_width=True):
-                _fetch_sheet.clear()
-                st.rerun()
+            current_url = get_transfers_sheet_url()
 
-    # ── Upload fallback ───────────────────────────────────────────────────────
-    with st.expander("📂 Upload transfers.xlsx (local fallback)", expanded=False):
-        uploaded = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="transfers_upload")
-        if uploaded:
-            os.makedirs(DATA_DIR, exist_ok=True)
-            with open(TRANSFERS_FILE, "wb") as f:
-                f.write(uploaded.read())
-            st.success("transfers.xlsx updated!")
-            st.rerun()
-        st.markdown("""
-        **Expected columns:** Timestamp, Agent Name, Customer Name, Address, Phone Number,
-        Electric Bill, Utility Provider, Credit Score, Email, Transfer to, Campaign,
-        Customer Name 2, Customer phone number, Address 2, Email 2, Roof Type, Age of Roof, Status, FeedBack, H comments, File
-        """)
+            col_url, col_save, col_refresh = st.columns([5, 1, 1])
+            with col_url:
+                sheet_url_input = st.text_input(
+                    "Sheet URL",
+                    value=current_url,
+                    placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit",
+                    label_visibility="collapsed",
+                    key="transfers_sheet_input",
+                )
+            with col_save:
+                if st.button("💾 Save for All", key="save_transfers_url", use_container_width=True):
+                    set_transfers_sheet_url(sheet_url_input.strip())
+                    _fetch_sheet.clear()
+                    st.success("✅ Saved to database! Applied for ALL users.")
+                    st.rerun()
+            with col_refresh:
+                if st.button("🔄 Refresh", key="refresh_transfers", use_container_width=True):
+                    _fetch_sheet.clear()
+                    st.rerun()
+
+            if current_url:
+                st.success(f"✅ Active URL: {current_url[:50]}...")
+            else:
+                st.info("ℹ️ No Google Sheet connected. Using local Excel file.")
+    else:
+        # Show status for non-admin users (read-only)
+        current_url = get_transfers_sheet_url()
+        if current_url:
+            st.caption("🔗 Connected to Google Sheet (managed by Admin)")
+        else:
+            st.caption("📁 Using local Excel file")
+
+    # ── Upload fallback (Admin only) ──────────────────────────────────────────
+    if is_admin:
+        with st.expander("📂 Upload transfers.xlsx (local fallback)", expanded=False):
+            uploaded = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="transfers_upload")
+            if uploaded:
+                os.makedirs(DATA_DIR, exist_ok=True)
+                with open(TRANSFERS_FILE, "wb") as f:
+                    f.write(uploaded.read())
+                st.success("transfers.xlsx updated!")
+                st.rerun()
+            st.markdown("""
+            **Expected columns:** Timestamp, Agent Name, Customer Name, Address, Phone Number,
+            Electric Bill, Utility Provider, Credit Score, Email, Transfer to, Campaign,
+            Customer Name 2, Customer phone number, Address 2, Email 2, Roof Type, Age of Roof, Status, FeedBack, H comments, File
+            """)
 
     # ── Load data ─────────────────────────────────────────────────────────────
     df, source = _load_transfers(agent_name, is_admin)
@@ -269,175 +285,4 @@ def render_transfers_tab(user: dict):
         filtered = filtered[filtered["Agent Name"] == agent_filter]
     if search:
         mask = pd.Series(False, index=filtered.index)
-        search_cols = ["Customer Name", "Phone Number", "Address", "Email", "Agent Name"]
-        for col in search_cols:
-            if col in filtered.columns:
-                mask |= filtered[col].astype(str).str.contains(search, case=False, na=False)
-        filtered = filtered[mask]
-
-    # ── KPI cards ─────────────────────────────────────────────────────────────
-    total_transfers = len(filtered)
-    total_agents = filtered["Agent Name"].nunique() if "Agent Name" in filtered.columns else 0
-    
-    status_counts = {}
-    if "Status" in filtered.columns:
-        status_counts = filtered["Status"].value_counts().to_dict()
-    
-    # Get closed count (case insensitive - matches "Closed" or "closed")
-    closed_count = 0
-    if "Status" in filtered.columns:
-        closed_count = sum(1 for s in filtered["Status"] if str(s).strip().lower() == "closed")
-    
-    # Get new count
-    new_count = 0
-    if "Status" in filtered.columns:
-        new_count = sum(1 for s in filtered["Status"] if str(s).strip().lower() == "new")
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.metric("📊 Total Transfers", total_transfers)
-    with col2:
-        st.metric("👤 Agents", total_agents)
-    with col3:
-        st.metric("📌 New", new_count)
-    with col4:
-        st.metric("✅ Closed", closed_count)
-    with col5:
-        # Close rate
-        rate = round((closed_count / total_transfers) * 100, 1) if total_transfers > 0 else 0
-        st.metric("🎯 Close Rate", f"{rate}%")
-
-    # ── Charts ─────────────────────────────────────────────────────────────────
-    try:
-        import plotly.express as px
-
-        if "Timestamp" in filtered.columns and not filtered.empty:
-
-            col_l, col_r = st.columns(2)
-
-            with col_l:
-                daily = (
-                    filtered.groupby(filtered["Timestamp"].dt.date)
-                    .size()
-                    .reset_index(name="count")
-                )
-                daily.columns = ["Date", "Count"]
-                daily = daily.sort_values("Date")
-                fig = px.bar(
-                    daily, x="Date", y="Count",
-                    title="📈 Transfers Trend",
-                    template="plotly_dark",
-                    color_discrete_sequence=["#4F6BFF"],
-                )
-                fig.update_layout(
-                    paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                    font_color="#C8CADE",
-                    margin=dict(l=10, r=10, t=45, b=10),
-                    title_font_size=13,
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col_r:
-                if "Status" in filtered.columns:
-                    sc = filtered["Status"].value_counts().reset_index()
-                    sc.columns = ["Status", "Count"]
-                    fig2 = px.pie(
-                        sc, values="Count", names="Status",
-                        title="🥧 Transfers by Status",
-                        template="plotly_dark",
-                        color_discrete_sequence=["#4F6BFF", "#7C3AED", "#06D6A0", "#FF6B6B", "#FFD166"],
-                    )
-                    fig2.update_layout(
-                        paper_bgcolor="#1A1D27", font_color="#C8CADE",
-                        margin=dict(l=10, r=10, t=45, b=10),
-                        title_font_size=13,
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
-
-            # Row 2: Agent performance + Utility Provider
-            col_l2, col_r2 = st.columns(2)
-
-            with col_l2:
-                if "Agent Name" in filtered.columns:
-                    by_agent = (
-                        filtered.groupby("Agent Name")
-                        .size()
-                        .reset_index(name="count")
-                        .sort_values("count", ascending=False)
-                        .head(10)
-                    )
-                    fig3 = px.bar(
-                        by_agent, x="count", y="Agent Name",
-                        orientation="h",
-                        title="👤 Transfers by Agent",
-                        template="plotly_dark",
-                        color_discrete_sequence=["#7C3AED"],
-                    )
-                    fig3.update_layout(
-                        paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                        font_color="#C8CADE",
-                        margin=dict(l=10, r=10, t=45, b=10),
-                        title_font_size=13,
-                        yaxis=dict(autorange="reversed"),
-                    )
-                    st.plotly_chart(fig3, use_container_width=True)
-
-            with col_r2:
-                if "Utility Provider" in filtered.columns:
-                    by_provider = (
-                        filtered.groupby("Utility Provider")
-                        .size()
-                        .reset_index(name="count")
-                        .sort_values("count", ascending=False)
-                        .head(10)
-                    )
-                    fig4 = px.pie(
-                        by_provider, values="count", names="Utility Provider",
-                        title="⚡ Utility Provider Distribution",
-                        template="plotly_dark",
-                        color_discrete_sequence=["#06D6A0", "#4F6BFF", "#7C3AED", "#FF9F43"],
-                    )
-                    fig4.update_layout(
-                        paper_bgcolor="#1A1D27", font_color="#C8CADE",
-                        margin=dict(l=10, r=10, t=45, b=10),
-                        title_font_size=13,
-                    )
-                    st.plotly_chart(fig4, use_container_width=True)
-
-    except ImportError:
-        st.info("Install plotly for charts: `pip install plotly`")
-
-    # ── Table ─────────────────────────────────────────────────────────────────
-    st.markdown("#### 📋 Transfers Records")
-    
-    # Select columns to show
-    show_cols = ["Timestamp", "Agent Name", "Customer Name", "Phone Number", "Address", 
-                 "Electric Bill", "Utility Provider", "Status"]
-    available_cols = [c for c in show_cols if c in filtered.columns]
-    
-    if available_cols:
-        st.dataframe(filtered[available_cols].reset_index(drop=True), use_container_width=True, height=340)
-    else:
-        st.dataframe(filtered.reset_index(drop=True), use_container_width=True, height=340)
-
-    # ── Export (admin only) ───────────────────────────────────────────────────
-    if is_admin:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.download_button(
-                "⬇️ Export to CSV",
-                filtered.to_csv(index=False).encode(),
-                "transfers_export.csv",
-                "text/csv",
-                use_container_width=True,
-            )
-        with c2:
-            sheet_url_write = st.session_state.get("transfers_sheet_url", "").strip()
-            if sheet_url_write:
-                if st.button("📤 Push to Google Sheets", key="push_transfers", use_container_width=True):
-                    ok, msg = _push_to_sheets(filtered, sheet_url_write)
-                    st.success(msg) if ok else st.error(msg)
-            else:
-                st.button("📤 Push to Google Sheets", disabled=True,
-                          help="Save a Sheet URL first", use_container_width=True,
-                          key="push_transfers_disabled")
+        search_cols = ["Customer Name",
