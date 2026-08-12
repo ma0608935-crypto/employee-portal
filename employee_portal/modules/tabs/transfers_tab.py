@@ -285,4 +285,166 @@ def render_transfers_tab(user: dict):
         filtered = filtered[filtered["Agent Name"] == agent_filter]
     if search:
         mask = pd.Series(False, index=filtered.index)
-        search_cols = ["Customer Name",
+        search_cols = ["Customer Name", "Phone Number", "Address", "Email", "Agent Name"]
+        for col in search_cols:
+            if col in filtered.columns:
+                mask |= filtered[col].astype(str).str.contains(search, case=False, na=False)
+        filtered = filtered[mask]
+
+    # ── KPI cards ─────────────────────────────────────────────────────────────
+    total_transfers = len(filtered)
+    total_agents = filtered["Agent Name"].nunique() if "Agent Name" in filtered.columns else 0
+    
+    closed_count = 0
+    if "Status" in filtered.columns:
+        closed_count = sum(1 for s in filtered["Status"] if str(s).strip().lower() == "closed")
+    
+    new_count = 0
+    if "Status" in filtered.columns:
+        new_count = sum(1 for s in filtered["Status"] if str(s).strip().lower() == "new")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("📊 Total Transfers", total_transfers)
+    with col2:
+        st.metric("👤 Agents", total_agents)
+    with col3:
+        st.metric("📌 New", new_count)
+    with col4:
+        st.metric("✅ Closed", closed_count)
+    with col5:
+        rate = round((closed_count / total_transfers) * 100, 1) if total_transfers > 0 else 0
+        st.metric("🎯 Close Rate", f"{rate}%")
+
+    # ── Charts ─────────────────────────────────────────────────────────────────
+    try:
+        import plotly.express as px
+
+        if "Timestamp" in filtered.columns and not filtered.empty:
+
+            col_l, col_r = st.columns(2)
+
+            with col_l:
+                daily = (
+                    filtered.groupby(filtered["Timestamp"].dt.date)
+                    .size()
+                    .reset_index(name="count")
+                )
+                daily.columns = ["Date", "Count"]
+                daily = daily.sort_values("Date")
+                fig = px.bar(
+                    daily, x="Date", y="Count",
+                    title="📈 Transfers Trend",
+                    template="plotly_dark",
+                    color_discrete_sequence=["#4F6BFF"],
+                )
+                fig.update_layout(
+                    paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
+                    font_color="#C8CADE",
+                    margin=dict(l=10, r=10, t=45, b=10),
+                    title_font_size=13,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col_r:
+                if "Status" in filtered.columns:
+                    sc = filtered["Status"].value_counts().reset_index()
+                    sc.columns = ["Status", "Count"]
+                    fig2 = px.pie(
+                        sc, values="Count", names="Status",
+                        title="🥧 Transfers by Status",
+                        template="plotly_dark",
+                        color_discrete_sequence=["#4F6BFF", "#7C3AED", "#06D6A0", "#FF6B6B", "#FFD166"],
+                    )
+                    fig2.update_layout(
+                        paper_bgcolor="#1A1D27", font_color="#C8CADE",
+                        margin=dict(l=10, r=10, t=45, b=10),
+                        title_font_size=13,
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
+
+            col_l2, col_r2 = st.columns(2)
+
+            with col_l2:
+                if "Agent Name" in filtered.columns:
+                    by_agent = (
+                        filtered.groupby("Agent Name")
+                        .size()
+                        .reset_index(name="count")
+                        .sort_values("count", ascending=False)
+                        .head(10)
+                    )
+                    fig3 = px.bar(
+                        by_agent, x="count", y="Agent Name",
+                        orientation="h",
+                        title="👤 Transfers by Agent",
+                        template="plotly_dark",
+                        color_discrete_sequence=["#7C3AED"],
+                    )
+                    fig3.update_layout(
+                        paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
+                        font_color="#C8CADE",
+                        margin=dict(l=10, r=10, t=45, b=10),
+                        title_font_size=13,
+                        yaxis=dict(autorange="reversed"),
+                    )
+                    st.plotly_chart(fig3, use_container_width=True)
+
+            with col_r2:
+                if "Utility Provider" in filtered.columns:
+                    by_provider = (
+                        filtered.groupby("Utility Provider")
+                        .size()
+                        .reset_index(name="count")
+                        .sort_values("count", ascending=False)
+                        .head(10)
+                    )
+                    fig4 = px.pie(
+                        by_provider, values="count", names="Utility Provider",
+                        title="⚡ Utility Provider Distribution",
+                        template="plotly_dark",
+                        color_discrete_sequence=["#06D6A0", "#4F6BFF", "#7C3AED", "#FF9F43"],
+                    )
+                    fig4.update_layout(
+                        paper_bgcolor="#1A1D27", font_color="#C8CADE",
+                        margin=dict(l=10, r=10, t=45, b=10),
+                        title_font_size=13,
+                    )
+                    st.plotly_chart(fig4, use_container_width=True)
+
+    except ImportError:
+        st.info("Install plotly for charts: `pip install plotly`")
+
+    # ── Table ─────────────────────────────────────────────────────────────────
+    st.markdown("#### 📋 Transfers Records")
+    
+    show_cols = ["Timestamp", "Agent Name", "Customer Name", "Phone Number", "Address", 
+                 "Electric Bill", "Utility Provider", "Status"]
+    available_cols = [c for c in show_cols if c in filtered.columns]
+    
+    if available_cols:
+        st.dataframe(filtered[available_cols].reset_index(drop=True), use_container_width=True, height=340)
+    else:
+        st.dataframe(filtered.reset_index(drop=True), use_container_width=True, height=340)
+
+    # ── Export (admin only) ───────────────────────────────────────────────────
+    if is_admin:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button(
+                "⬇️ Export to CSV",
+                filtered.to_csv(index=False).encode(),
+                "transfers_export.csv",
+                "text/csv",
+                use_container_width=True,
+            )
+        with c2:
+            sheet_url_write = get_transfers_sheet_url()
+            if sheet_url_write:
+                if st.button("📤 Push to Google Sheets", key="push_transfers", use_container_width=True):
+                    ok, msg = _push_to_sheets(filtered, sheet_url_write)
+                    st.success(msg) if ok else st.error(msg)
+            else:
+                st.button("📤 Push to Google Sheets", disabled=True,
+                          help="Save a Sheet URL first", use_container_width=True,
+                          key="push_transfers_disabled")
