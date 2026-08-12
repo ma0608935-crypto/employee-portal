@@ -1,6 +1,6 @@
 """
 modules/tabs/reports_tab.py
-PDF Reports for employees — attendance, breaks, and sales.
+PDF Reports for employees — attendance, breaks, and transfers.
 """
 
 import streamlit as st
@@ -15,16 +15,16 @@ from modules.database import (
     get_attendance, get_breaks, get_all_users, get_employee
 )
 
-# ── Try to import sales data ──────────────────────────────────────────────────
+# ── Try to import transfers data ─────────────────────────────────────────────
 try:
     DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-    SALES_FILE = os.path.join(DATA_DIR, "sales.xlsx")
-    if os.path.exists(SALES_FILE):
-        sales_df = pd.read_excel(SALES_FILE)
+    TRANSFERS_FILE = os.path.join(DATA_DIR, "transfers.xlsx")
+    if os.path.exists(TRANSFERS_FILE):
+        transfers_df = pd.read_excel(TRANSFERS_FILE)
     else:
-        sales_df = pd.DataFrame()
+        transfers_df = pd.DataFrame()
 except:
-    sales_df = pd.DataFrame()
+    transfers_df = pd.DataFrame()
 
 
 def clean_text(text):
@@ -49,11 +49,9 @@ class PDFReport(FPDF):
     
     def header(self):
         """Header for each page - white background."""
-        # White background
         self.set_fill_color(255, 255, 255)
         self.rect(0, 0, 210, 32, 'F')
         
-        # Dark text for header
         self.set_text_color(26, 29, 39)
         self.set_font(self.font_name, 'B', 16)
         self.cell(0, 10, 'Employee Performance Report', 0, 1, 'C')
@@ -73,7 +71,6 @@ class PDFReport(FPDF):
     
     def chapter_title(self, title):
         """Section title with dark text."""
-        # Light gray background for section headers
         self.set_fill_color(240, 240, 240)
         self.rect(10, self.get_y(), 190, 8, 'F')
         
@@ -87,12 +84,10 @@ class PDFReport(FPDF):
         """Add a statistics row with dark text on white background."""
         self.set_font(self.font_name, 'B' if bold else '', 10)
         
-        # Label in dark gray
         self.set_text_color(60, 60, 60)
         clean_label = clean_text(label)
         self.cell(90, 7, clean_label, 0, 0, 'L')
         
-        # Value in bold dark
         self.set_text_color(26, 29, 39)
         clean_value = clean_text(str(value))
         self.cell(10, 7, '', 0, 0, 'L')
@@ -102,18 +97,15 @@ class PDFReport(FPDF):
         """Add a metric showing actual / total."""
         self.set_font(self.font_name, '', 10)
         
-        # Label
         self.set_text_color(60, 60, 60)
         clean_label = clean_text(label)
         self.cell(90, 7, clean_label, 0, 0, 'L')
         
-        # Actual value (bold dark)
         self.set_text_color(26, 29, 39)
         self.set_font(self.font_name, 'B', 10)
         clean_actual = clean_text(f"{actual}{unit}")
         self.cell(30, 7, clean_actual, 0, 0, 'L')
         
-        # Separator and total
         self.set_text_color(100, 100, 100)
         self.set_font(self.font_name, '', 10)
         self.cell(10, 7, '/', 0, 0, 'C')
@@ -122,7 +114,6 @@ class PDFReport(FPDF):
         clean_total = clean_text(f"{total}{unit}")
         self.cell(30, 7, clean_total, 0, 0, 'L')
         
-        # Empty space for alignment
         self.cell(0, 7, '', 0, 1, 'L')
     
     def add_divider(self):
@@ -137,43 +128,36 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     Generate a PDF report for a specific employee.
     Returns BytesIO object.
     """
-    # ── Get employee data ─────────────────────────────────────────────────────
     employee = get_employee(employee_id)
     if not employee:
         return None
     
-    # ── Get statistics ───────────────────────────────────────────────────────
     attendance = get_attendance(employee_id)
     breaks_data = get_breaks(employee_id)
     
-    # Sales data for this employee
-    emp_sales = pd.DataFrame()
-    if not sales_df.empty and "Employee_ID" in sales_df.columns:
-        emp_sales = sales_df[sales_df["Employee_ID"] == employee_id]
+    # ✅ Load transfers data for this employee
+    emp_transfers = pd.DataFrame()
+    if not transfers_df.empty and "Agent Name" in transfers_df.columns:
+        emp_transfers = transfers_df[transfers_df["Agent Name"] == employee.get("full_name", "")]
     
-    # ── Calculate stats ──────────────────────────────────────────────────────
-    # Attendance
     total_days = len(attendance)
     present = sum(1 for a in attendance if a["status"] == "Present")
     late = sum(1 for a in attendance if a["status"] == "Late")
     absent = total_days - present - late
     att_rate = round(present / total_days * 100) if total_days else 0
     
-    # Breaks
     completed_breaks = [b for b in breaks_data if b.get("duration")]
     total_break_min = sum(b["duration"] for b in completed_breaks)
     total_breaks = len(completed_breaks)
     avg_break = round(total_break_min / total_breaks, 1) if total_breaks else 0
     
-    # Break target: 1 hour (60 min) per working day
     BREAK_TARGET_MIN = total_days * 60
     break_actual_hours = total_break_min / 60
     break_target_hours = total_days
     
-    # Sales
-    total_sales = len(emp_sales)
-    # Sales target: 5 sales per day
-    SALES_TARGET = total_days * 5
+    # ✅ Transfers stats
+    total_transfers = len(emp_transfers)
+    TRANSFERS_TARGET = total_days * 5  # Target: 5 transfers per day
     
     stats = {
         "attendance": {
@@ -189,19 +173,16 @@ def generate_employee_report(employee_id: str) -> BytesIO:
             "target_hours": break_target_hours,
             "avg_minutes": avg_break,
         },
-        "sales": {
-            "total": total_sales,
-            "target": SALES_TARGET,
+        "transfers": {
+            "total": total_transfers,
+            "target": TRANSFERS_TARGET,
         }
     }
     
-    # ── Create PDF ──────────────────────────────────────────────────────────
     pdf = PDFReport(employee, stats)
     pdf.add_page()
     
-    # ── Employee Info ────────────────────────────────────────────────────────
     pdf.chapter_title("Employee Information")
-    
     pdf.add_stats_row("Employee Name", employee.get("full_name", "-"), bold=True)
     pdf.add_stats_row("Employee ID", employee.get("employee_id", "-"))
     pdf.add_stats_row("Department", employee.get("department", "-"))
@@ -214,9 +195,7 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.ln(4)
     pdf.add_divider()
     
-    # ── Attendance ──────────────────────────────────────────────────────────
     pdf.chapter_title("Attendance Summary")
-    
     pdf.add_metric("Attendance Rate", f"{stats['attendance']['rate']}%", "100%")
     pdf.add_stats_row("Total Working Days", stats["attendance"]["total_days"])
     pdf.add_stats_row("Present", f"{stats['attendance']['present']} / {stats['attendance']['total_days']} days")
@@ -226,50 +205,31 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     pdf.ln(4)
     pdf.add_divider()
     
-    # ── Breaks ──────────────────────────────────────────────────────────────
     pdf.chapter_title("Break Summary")
-    
-    pdf.add_metric(
-        "Break Time (Target: 1h/day)", 
-        f"{stats['breaks']['actual_hours']:.1f}", 
-        f"{stats['breaks']['target_hours']:.1f}", 
-        "h"
-    )
+    pdf.add_metric("Break Time (Target: 1h/day)", f"{stats['breaks']['actual_hours']:.1f}", f"{stats['breaks']['target_hours']:.1f}", "h")
     pdf.add_stats_row("Total Breaks Taken", stats["breaks"]["total"])
     pdf.add_stats_row("Average Break Duration", f"{stats['breaks']['avg_minutes']:.1f} min")
     
     pdf.ln(4)
     pdf.add_divider()
     
-    # ── Sales ──────────────────────────────────────────────────────────────
-    pdf.chapter_title("Sales Summary")
-    
-    pdf.add_metric(
-        "Total Sales (Target: 5/day)", 
-        stats['sales']['total'], 
-        stats['sales']['target']
-    )
+    # ✅ Transfers Summary (بدلاً من Sales)
+    pdf.chapter_title("Transfers Summary")
+    pdf.add_metric("Total Transfers (Target: 5/day)", stats['transfers']['total'], stats['transfers']['target'])
     
     pdf.ln(4)
     pdf.add_divider()
     
-    # ── Recent Activity ─────────────────────────────────────────────────────
     pdf.chapter_title("Recent Activity")
-    
     pdf.set_font('Helvetica', '', 9)
     
-    # Get recent items
     recent_items = []
-    
-    # Add recent attendance (last 5)
     for a in attendance[:5]:
         recent_items.append({
             "date": a.get("date", ""),
             "type": "Check-in",
             "detail": f"{a.get('check_in', '')} ({a.get('status', '')})"
         })
-    
-    # Add recent breaks (last 5)
     for b in breaks_data[:5]:
         if b.get("duration"):
             recent_items.append({
@@ -277,17 +237,15 @@ def generate_employee_report(employee_id: str) -> BytesIO:
                 "type": "Break",
                 "detail": f"{b.get('break_name', '')} - {b.get('duration', 0):.0f} min"
             })
-    
-    # Add recent sales (last 5)
-    if not emp_sales.empty:
-        for _, sale in emp_sales.head(5).iterrows():
+    # ✅ Add recent transfers
+    if not emp_transfers.empty:
+        for _, transfer in emp_transfers.head(5).iterrows():
             recent_items.append({
-                "date": sale.get("Date", ""),
-                "type": "Sale",
-                "detail": f"{sale.get('Product', '')} x{sale.get('Amount', 0)}"
+                "date": transfer.get("Timestamp", ""),
+                "type": "Transfer",
+                "detail": f"{transfer.get('Customer Name', '')} - {transfer.get('Status', '')}"
             })
     
-    # Sort by date (newest first) and take top 8
     recent_items.sort(key=lambda x: x["date"], reverse=True)
     recent_items = recent_items[:8]
     
@@ -308,9 +266,7 @@ def generate_employee_report(employee_id: str) -> BytesIO:
     else:
         pdf.add_stats_row("No recent activity", "")
     
-    # ── Output ──────────────────────────────────────────────────────────────
     pdf_bytes = pdf.output(dest='S')
-    
     return BytesIO(pdf_bytes)
 
 
@@ -344,9 +300,9 @@ def render_reports_tab(user: dict):
     
     st.markdown("""
     <div class="report-card">
-        <div class="report-title">Generate Performance Report</div>
+        <div class="report-title">📊 Generate Performance Report</div>
         <div class="report-sub">
-            Generate a detailed PDF report for any employee including attendance, breaks, and sales.
+            Generate a detailed PDF report for any employee including attendance, breaks, and transfers.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -362,12 +318,12 @@ def render_reports_tab(user: dict):
         selected_emp_id = emp_options[selected_label]
     else:
         selected_emp_id = user.get("employee_id")
-        st.info(f"Generating report for: **{user.get('full_name', '')}**")
+        st.info(f"👤 Generating report for: **{user.get('full_name', '')}**")
     
     # ── Generate Button ─────────────────────────────────────────────────────
     col1, col2, col3 = st.columns([2, 1, 2])
     with col2:
-        if st.button("Generate PDF Report", use_container_width=True, type="primary"):
+        if st.button("📄 Generate PDF Report", use_container_width=True, type="primary"):
             with st.spinner("Generating report..."):
                 pdf_bytes = generate_employee_report(selected_emp_id)
                 if pdf_bytes:
@@ -375,22 +331,21 @@ def render_reports_tab(user: dict):
                     filename = f"report_{employee.get('full_name', 'employee').replace(' ', '_')}_{date.today()}.pdf"
                     
                     st.download_button(
-                        label="Download PDF Report",
+                        label="⬇️ Download PDF Report",
                         data=pdf_bytes,
                         file_name=filename,
                         mime="application/pdf",
                         use_container_width=True,
                         key="download_report"
                     )
-                    st.success("Report generated successfully!")
+                    st.success("✅ Report generated successfully!")
                 else:
-                    st.error("Failed to generate report. Please try again.")
+                    st.error("❌ Failed to generate report. Please try again.")
     
     # ── Preview Stats ──────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### Report Preview")
+    st.markdown("### 📊 Report Preview")
     
-    # Show quick stats for selected employee
     emp = get_employee(selected_emp_id)
     if emp:
         attendance = get_attendance(selected_emp_id)
@@ -400,18 +355,18 @@ def render_reports_tab(user: dict):
         present = sum(1 for a in attendance if a["status"] == "Present")
         att_rate = round(present / total_days * 100) if total_days else 0
         
-        # Sales count
-        emp_sales = pd.DataFrame()
-        if not sales_df.empty and "Employee_ID" in sales_df.columns:
-            emp_sales = sales_df[sales_df["Employee_ID"] == selected_emp_id]
+        # ✅ Transfers count
+        emp_transfers = pd.DataFrame()
+        if not transfers_df.empty and "Agent Name" in transfers_df.columns:
+            emp_transfers = transfers_df[transfers_df["Agent Name"] == emp.get("full_name", "")]
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Employee", emp.get("full_name", "-"))
+            st.metric("👤 Employee", emp.get("full_name", "-"))
         with col2:
-            st.metric("Attendance Rate", f"{att_rate}%")
+            st.metric("📊 Attendance Rate", f"{att_rate}%")
         with col3:
-            st.metric("Total Sales", len(emp_sales))
+            st.metric("📦 Total Transfers", len(emp_transfers))
         with col4:
             total_breaks = len([b for b in breaks_data if b.get("duration")])
-            st.metric("Total Breaks", total_breaks)
+            st.metric("☕ Total Breaks", total_breaks)
