@@ -1,5 +1,5 @@
 """
-modules/tabs/sales_tab.py
+modules/tabs/transfers_tab.py
 Transfers tab — Google Sheets as primary live source with auto-refresh,
 Excel fallback, all charts update from whatever source is active.
 """
@@ -8,19 +8,10 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import date, datetime, timedelta
+import random
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 TRANSFERS_FILE = os.path.join(DATA_DIR, "transfers.xlsx")
-
-LOGO = "https://plain-eeur-prod-public.komododecks.com/202608/09/cTbwjWfVAMvKzMZ4n8ET/image.png"
-
-# ── Expected columns for transfers ────────────────────────────────────────────
-EXPECTED_COLUMNS = [
-    "Timestamp", "Agent Name", "Customer Name", "Address", "Phone Number",
-    "Electric Bill", "Utility Provider", "Credit Score", "Email", "Transfer to",
-    "Campaign", "Customer Name", "Customer phone number", "Address", "Email",
-    "Roof Type", "Age of Roof", "Status", "FeedBack", "H comments", "File"
-]
 
 
 # ── Google Sheets helpers ─────────────────────────────────────────────────────
@@ -74,44 +65,51 @@ def _push_to_sheets(df: pd.DataFrame, url: str):
 def _ensure_sample_transfers():
     """Create sample transfers.xlsx so the app works out of the box."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    if not os.path.exists(TRANSFERS_FILE):
-        import random
-        rows = []
-        agents = ["John Smith", "Sara Johnson", "Mike Wilson", "Emma Davis"]
-        customers = ["Ahmed Hassan", "Mona Ibrahim", "Khaled Ali", "Nadia Samir", "Omar Farouk", 
-                     "Layla Mahmoud", "Youssef Karim", "Hana Nasser", "Karim Adel", "Sara Tarek"]
-        statuses = ["New", "Contacted", "Qualified", "Closed", "Lost"]
-        campaigns = ["Campaign A", "Campaign B", "Campaign C"]
-        
-        today = date.today()
-        for i in range(30):
-            d = today - timedelta(days=i)
-            for agent in agents[:2]:
-                if random.random() > 0.4:
-                    rows.append({
-                        "Timestamp": d.strftime("%Y-%m-%d"),
-                        "Agent Name": agent,
-                        "Customer Name": random.choice(customers),
-                        "Address": f"{random.randint(10, 999)} Main St, City",
-                        "Phone Number": f"01{random.randint(0, 9)}{random.randint(10000000, 99999999)}",
-                        "Electric Bill": f"{random.randint(50, 500)}",
-                        "Utility Provider": random.choice(["Provider A", "Provider B", "Provider C"]),
-                        "Credit Score": random.randint(300, 850),
-                        "Email": f"customer{random.randint(1, 100)}@email.com",
-                        "Transfer to": random.choice(["Company A", "Company B", "Company C"]),
-                        "Campaign": random.choice(campaigns),
-                        "Customer Name": random.choice(customers),
-                        "Customer phone number": f"01{random.randint(0, 9)}{random.randint(10000000, 99999999)}",
-                        "Address": f"{random.randint(10, 999)} Main St, City",
-                        "Email": f"customer{random.randint(1, 100)}@email.com",
-                        "Roof Type": random.choice(["Flat", "Pitched", "Tile", "Metal"]),
-                        "Age of Roof": random.randint(1, 30),
-                        "Status": random.choice(statuses),
-                        "FeedBack": random.choice(["", "Good lead", "Not interested", "Follow up needed"]),
-                        "H comments": random.choice(["", "Call back", "Send email", "Schedule meeting"]),
-                        "File": "",
-                    })
-        pd.DataFrame(rows).to_excel(TRANSFERS_FILE, index=False)
+    
+    # لو الملف موجود، متعمليش حاجة
+    if os.path.exists(TRANSFERS_FILE):
+        return
+    
+    rows = []
+    agents = ["John Smith", "Sara Johnson", "Mike Wilson", "Emma Davis"]
+    customers = ["Ahmed Hassan", "Mona Ibrahim", "Khaled Ali", "Nadia Samir", "Omar Farouk", 
+                 "Layla Mahmoud", "Youssef Karim", "Hana Nasser", "Karim Adel", "Sara Tarek"]
+    statuses = ["New", "Contacted", "Qualified", "Closed", "Lost"]
+    campaigns = ["Campaign A", "Campaign B", "Campaign C"]
+    providers = ["Provider A", "Provider B", "Provider C", "Provider D"]
+    roof_types = ["Flat", "Pitched", "Tile", "Metal"]
+    
+    today = date.today()
+    for i in range(50):
+        d = today - timedelta(days=random.randint(0, 60))
+        agent = random.choice(agents)
+        customer = random.choice(customers)
+        rows.append({
+            "Timestamp": d.strftime("%Y-%m-%d %H:%M:%S"),
+            "Agent Name": agent,
+            "Customer Name": customer,
+            "Address": f"{random.randint(10, 999)} Main St, City {random.randint(1, 20)}",
+            "Phone Number": f"01{random.randint(0, 9)}{random.randint(10000000, 99999999)}",
+            "Electric Bill": f"{random.randint(50, 500)}",
+            "Utility Provider": random.choice(providers),
+            "Credit Score": random.randint(300, 850),
+            "Email": f"{customer.lower().replace(' ', '.')}@email.com",
+            "Transfer to": random.choice(["Company A", "Company B", "Company C"]),
+            "Campaign": random.choice(campaigns),
+            "Customer Name 2": customer,
+            "Customer phone number": f"01{random.randint(0, 9)}{random.randint(10000000, 99999999)}",
+            "Address 2": f"{random.randint(10, 999)} Main St, City {random.randint(1, 20)}",
+            "Email 2": f"{customer.lower().replace(' ', '.')}@email.com",
+            "Roof Type": random.choice(roof_types),
+            "Age of Roof": random.randint(1, 30),
+            "Status": random.choice(statuses),
+            "FeedBack": random.choice(["", "Good lead", "Not interested", "Follow up needed", "Call back requested"]),
+            "H comments": random.choice(["", "Call back", "Send email", "Schedule meeting", ""]),
+            "File": "",
+        })
+    
+    df = pd.DataFrame(rows)
+    df.to_excel(TRANSFERS_FILE, index=False)
 
 
 def _load_transfers(agent_name: str, is_admin: bool):
@@ -119,6 +117,9 @@ def _load_transfers(agent_name: str, is_admin: bool):
     Load transfers data — Google Sheets if URL is set, otherwise Excel.
     Returns (DataFrame, source_label).
     """
+    # تأكدي من وجود ملف sample
+    _ensure_sample_transfers()
+    
     sheet_url = st.session_state.get("transfers_sheet_url", "").strip()
 
     if sheet_url:
@@ -132,7 +133,6 @@ def _load_transfers(agent_name: str, is_admin: bool):
             return df, "🟢 Google Sheets (live)"
 
     # Fallback → local Excel
-    _ensure_sample_transfers()
     try:
         df = pd.read_excel(TRANSFERS_FILE)
         df.columns = [c.strip() for c in df.columns]
@@ -140,7 +140,7 @@ def _load_transfers(agent_name: str, is_admin: bool):
             df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
         if not is_admin and "Agent Name" in df.columns:
             df = df[df["Agent Name"] == agent_name]
-        return df, "🟡 Local Excel (upload or connect a Sheet)"
+        return df, "🟡 Local Excel"
     except Exception as e:
         st.error(f"Error reading transfers data: {e}")
         return pd.DataFrame(), "❌ No data"
@@ -148,9 +148,32 @@ def _load_transfers(agent_name: str, is_admin: bool):
 
 # ── Main render ───────────────────────────────────────────────────────────────
 
-def render_sales_tab(user: dict):
+def render_transfers_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     agent_name = user.get("full_name", "")
+
+    st.markdown("""
+    <style>
+    .kpi-card {
+        background: #1A1D27;
+        border: 1px solid #2E3350;
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+    }
+    .kpi-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #E8EAF0;
+    }
+    .kpi-label {
+        color: #8B90A8;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # ── Google Sheets config panel ────────────────────────────────────────────
     with st.expander("🔗 Google Sheets Integration", expanded=False):
@@ -197,7 +220,7 @@ def render_sales_tab(user: dict):
         st.markdown("""
         **Expected columns:** Timestamp, Agent Name, Customer Name, Address, Phone Number,
         Electric Bill, Utility Provider, Credit Score, Email, Transfer to, Campaign,
-        Customer Name, Customer phone number, Address, Email, Roof Type, Age of Roof, Status, FeedBack, H comments, File
+        Customer Name 2, Customer phone number, Address 2, Email 2, Roof Type, Age of Roof, Status, FeedBack, H comments, File
         """)
 
     # ── Load data ─────────────────────────────────────────────────────────────
@@ -210,7 +233,7 @@ def render_sales_tab(user: dict):
         st.caption(f"As of: {pd.Timestamp.now().strftime('%H:%M:%S')}")
 
     if df.empty:
-        st.info("No transfers data found. Connect a Google Sheet or upload transfers.xlsx.")
+        st.info("📭 No transfers data found. Upload transfers.xlsx or connect a Google Sheet.")
         return
 
     # ── Filters ───────────────────────────────────────────────────────────────
