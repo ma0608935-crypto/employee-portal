@@ -4,12 +4,18 @@ modules/tabs/admin_tab.py
 
 import streamlit as st
 import pandas as pd
+import os
+from datetime import datetime
 from modules.database import (
     get_all_users, add_user, update_user, delete_user, reset_password,
     add_note, get_notes, get_attendance, get_breaks, get_callbacks
 )
 
 _P = "admintab_"
+
+# مسار قاعدة البيانات
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+DB_PATH = os.path.join(DATA_DIR, "portal.db")
 
 
 def render_admin_tab(user: dict):
@@ -24,13 +30,20 @@ def render_admin_tab(user: dict):
         color:#E8EAF0;margin-bottom:1rem;border-left:3px solid #7C3AED;
         padding-left:10px;
     }
+    .backup-card {
+        background: #1A1D27;
+        border: 1px solid #2E3350;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
     selected = st.radio(
         "Admin Section",
         ["👥 Employees", "➕ Add Employee", "📋 All Attendance",
-         "☕ All Breaks", "📞 All Callbacks", "📝 Add Note"],
+         "☕ All Breaks", "📞 All Callbacks", "📝 Add Note", "💾 Backup Database"],
         horizontal=True,
         label_visibility="collapsed",
         key=f"{_P}nav"
@@ -50,6 +63,8 @@ def render_admin_tab(user: dict):
         render_all_callbacks_section()
     elif selected == "📝 Add Note":
         render_add_note_section(user)
+    elif selected == "💾 Backup Database":
+        render_backup_section()
 
 
 def render_employees_section():
@@ -208,3 +223,87 @@ def render_add_note_section(user):
                         <div style="color:#C8CADE;font-size:0.85rem;margin-top:4px">
                             {n['note']}</div>
                     </div>""", unsafe_allow_html=True)
+
+
+def render_backup_section():
+    """Render backup section with download button."""
+    st.markdown('<div class="sec-title">💾 Backup Database</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="backup-card">
+        <p style="color:#8B90A8;font-size:0.9rem;">
+            📥 Download the entire database as a <strong>.db</strong> file.
+            <br>This file contains all data including:
+            <br>• Users & Employees
+            <br>• Attendance Records
+            <br>• Break Records
+            <br>• Callbacks
+            <br>• Notes
+            <br>• System Settings
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        # Check if database file exists
+        if os.path.exists(DB_PATH):
+            # Get file info
+            file_size = os.path.getsize(DB_PATH) / 1024  # KB
+            file_modified = datetime.fromtimestamp(os.path.getmtime(DB_PATH)).strftime("%Y-%m-%d %H:%M:%S")
+            
+            st.info(f"📁 **Database File:** `portal.db`\n\n📦 **Size:** {file_size:.1f} KB\n\n🕐 **Last Modified:** {file_modified}")
+            
+            # Download button
+            with open(DB_PATH, "rb") as f:
+                db_data = f.read()
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.download_button(
+                label="⬇️ Download Database Backup",
+                data=db_data,
+                file_name=f"portal_backup_{timestamp}.db",
+                mime="application/octet-stream",
+                use_container_width=True,
+                type="primary"
+            )
+            
+            st.caption("💡 Save this file in a safe place. You can restore it later if needed.")
+            
+        else:
+            st.error("❌ Database file not found!")
+    
+    # Restore section
+    st.markdown("---")
+    st.markdown("#### 📤 Restore Database from Backup")
+    
+    st.warning("""
+    ⚠️ **Caution:** Restoring will replace the current database with the backup file.
+    All current data will be lost!
+    """)
+    
+    uploaded_file = st.file_uploader(
+        "Upload a backup file (.db)",
+        type=["db"],
+        key="restore_db",
+        accept_multiple_files=False
+    )
+    
+    if uploaded_file:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("⚠️ Restore Database", use_container_width=True, type="secondary"):
+                # Create backup of current database
+                if os.path.exists(DB_PATH):
+                    backup_path = f"{DB_PATH}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    os.rename(DB_PATH, backup_path)
+                    st.info(f"📁 Current database backed up to: {backup_path}")
+                
+                # Save uploaded file
+                with open(DB_PATH, "wb") as f:
+                    f.write(uploaded_file.read())
+                
+                st.success("✅ Database restored successfully!")
+                st.warning("⚠️ The app will refresh now.")
+                st.rerun()
