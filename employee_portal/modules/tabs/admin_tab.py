@@ -8,7 +8,15 @@ from modules.database import (
     get_all_users, add_user, update_user, delete_user, reset_password,
     add_note, get_notes, get_attendance, get_breaks, get_callbacks
 )
-from modules.drive_backup import backup_to_google_drive, restore_from_google_drive
+
+# ✅ التحقق من وجود drive_backup قبل استيراده
+try:
+    from modules.drive_backup import backup_to_google_drive, restore_from_google_drive
+    DRIVE_BACKUP_AVAILABLE = True
+except ImportError:
+    DRIVE_BACKUP_AVAILABLE = False
+    backup_to_google_drive = None
+    restore_from_google_drive = None
 
 _P = "admintab_"
 
@@ -223,6 +231,11 @@ def render_add_note_section(user):
 def render_google_drive_backup_section():
     """Render Google Drive backup section."""
     st.markdown('<div class="sec-title">☁️ Google Drive Backup</div>', unsafe_allow_html=True)
+    
+    # ✅ التحقق من توفر الـ Backup
+    if not DRIVE_BACKUP_AVAILABLE:
+        st.error("❌ Google Drive backup module not available. Please check if `drive_backup.py` exists.")
+        return
     
     # Check if backup URL is configured
     backup_url = st.secrets.get("drive_apps_script", {}).get("backup_url", None)
