@@ -1,7 +1,7 @@
 """
 modules/tabs/transfers_tab.py
 Transfers tab — Google Sheets as primary live source with auto-refresh,
-Excel fallback, all charts update from whatever source is active.
+Excel fallback for reading only, writing directly to Google Sheets.
 """
 
 import streamlit as st
@@ -37,6 +37,43 @@ def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
         return df
     except Exception as e:
         return pd.DataFrame()
+
+
+def _append_to_google_sheet(row_data: dict, url: str):
+    """Append a single row to Google Sheet."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        
+        # Check if credentials exist
+        creds_dict = st.secrets.get("gcp_service_account", {})
+        if not creds_dict:
+            return False, "⚠️ Google Sheets not configured. Please add GCP Service Account to secrets.toml"
+        
+        creds = Credentials.from_service_account_info(
+            dict(creds_dict),
+            scopes=[
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/drive",
+            ],
+        )
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_url(url)
+        ws = sh.sheet1
+        
+        # Get all column headers
+        headers = ws.row_values(1)
+        
+        # Create row values in correct order
+        row_values = []
+        for col in headers:
+            row_values.append(row_data.get(col, ""))
+        
+        # Append row
+        ws.append_row(row_values)
+        return True, "✅ Transfer added to Google Sheets!"
+    except Exception as e:
+        return False, f"❌ Error: {str(e)}"
 
 
 def _ensure_sample_transfers():
@@ -121,25 +158,11 @@ def _load_transfers(agent_name: str, is_admin: bool):
         return pd.DataFrame(), "❌ No data"
 
 
-def _save_to_local_excel(row_data: dict):
-    """Save a new row to local Excel file."""
-    try:
-        _ensure_sample_transfers()
-        df = pd.read_excel(TRANSFERS_FILE)
-        new_row = pd.DataFrame([row_data])
-        df = pd.concat([df, new_row], ignore_index=True)
-        df.to_excel(TRANSFERS_FILE, index=False)
-        return True, "✅ Transfer added to local Excel!"
-    except Exception as e:
-        return False, f"❌ Error saving to local file: {e}"
-
-
 # ── Main render ───────────────────────────────────────────────────────────────
 
 def render_transfers_tab(user: dict):
     is_admin = user["role"] in ("admin", "leader")
     agent_name = user.get("full_name", "")
-    agent_id = user.get("employee_id", "")
 
     st.markdown("""
     <style>
@@ -207,28 +230,11 @@ def render_transfers_tab(user: dict):
             else:
                 st.info("ℹ️ No Google Sheet connected. Using local Excel file.")
     else:
-        # Show status for non-admin users (read-only)
         current_url = get_transfers_sheet_url()
         if current_url:
             st.caption("🔗 Connected to Google Sheet (managed by Admin)")
         else:
             st.caption("📁 Using local Excel file")
-
-    # ── Upload fallback (Admin only) ──────────────────────────────────────────
-    if is_admin:
-        with st.expander("📂 Upload transfers.xlsx (local fallback)", expanded=False):
-            uploaded = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="transfers_upload")
-            if uploaded:
-                os.makedirs(DATA_DIR, exist_ok=True)
-                with open(TRANSFERS_FILE, "wb") as f:
-                    f.write(uploaded.read())
-                st.success("transfers.xlsx updated!")
-                st.rerun()
-            st.markdown("""
-            **Expected columns:** Timestamp, Agent Name, Customer Name, Address, Phone Number,
-            Electric Bill, Utility Provider, Credit Score, Email, Transfer to, Campaign,
-            Customer Name 2, Customer phone number, Address 2, Email 2, Roof Type, Age of Roof, Status, FeedBack, H comments, File
-            """)
 
     # ── Add Transfer Form (ALL USERS) ──────────────────────────────────────────
     with st.expander("➕ Add New Transfer", expanded=False):
@@ -238,9 +244,14 @@ def render_transfers_tab(user: dict):
                     margin-bottom:0.75rem;">
             Fill in the details below to add a new transfer. 
             <span style="color:#4F6BFF;">Your name will be auto-filled as the Agent.</span>
-            <br><span style="color:#FFD166;">📌 Data will be saved to local Excel file first.</span>
+            <br><span style="color:#06D6A0;">📌 Data will be saved directly to Google Sheet.</span>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Check if Google Sheet is connected
+        sheet_url = get_transfers_sheet_url()
+        if not sheet_url:
+            st.warning("⚠️ No Google Sheet connected. Please ask an Admin to set up the Google Sheet URL.")
         
         with st.form("add_transfer_form"):
             col1, col2 = st.columns(2)
@@ -257,18 +268,16 @@ def render_transfers_tab(user: dict):
                 credit_score = st.text_input("Credit Score", placeholder="Enter credit score (300-850)")
                 status = st.selectbox("Status", ["New", "Contacted", "Qualified", "Closed", "Lost"])
             
-            # Hidden/auto fields
             st.caption(f"👤 Agent: {agent_name} (auto-assigned)")
             
-            # Submit button
-            submitted = st.form_submit_button("📤 Add Transfer", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("📤 Add Transfer to Google Sheet", use_container_width=True, type="primary")
             
             if submitted:
-                # Validate required fields
-                if not customer_name or not address or not phone or not utility_provider or not electricity_bill:
+                if not sheet_url:
+                    st.error("❌ No Google Sheet connected. Please ask an Admin to set up the Google Sheet URL.")
+                elif not customer_name or not address or not phone or not utility_provider or not electricity_bill:
                     st.error("❌ Please fill in all required fields (*).")
                 else:
-                    # Prepare row data
                     now = datetime.now()
                     row_data = {
                         "Timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -294,15 +303,15 @@ def render_transfers_tab(user: dict):
                         "File": "",
                     }
                     
-                    # ✅ Save to local Excel file (always works, no GCP needed)
-                    success, msg = _save_to_local_excel(row_data)
-                    if success:
-                        st.success(f"✅ Transfer added successfully to local Excel!")
-                        st.balloons()
-                        _fetch_sheet.clear()
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {msg}")
+                    with st.spinner("Saving to Google Sheet..."):
+                        success, msg = _append_to_google_sheet(row_data, sheet_url)
+                        if success:
+                            st.success(msg)
+                            st.balloons()
+                            _fetch_sheet.clear()
+                            st.rerun()
+                        else:
+                            st.error(msg)
 
     # ── Load data ─────────────────────────────────────────────────────────────
     df, source = _load_transfers(agent_name, is_admin)
@@ -334,7 +343,6 @@ def render_transfers_tab(user: dict):
     with col4:
         search = st.text_input("🔍 Search", placeholder="Customer, phone, address...", key="transfers_search")
 
-    # Apply filters
     filtered = df.copy()
     if "Timestamp" in filtered.columns:
         if period == "Today":
