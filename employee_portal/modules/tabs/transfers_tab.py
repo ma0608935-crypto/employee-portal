@@ -1,7 +1,7 @@
 """
 modules/tabs/transfers_tab.py
 Transfers tab — Google Sheets as primary live source with auto-refresh,
-using Google Apps Script for writing data.
+writing directly to the connected Google Sheet.
 """
 
 import streamlit as st
@@ -9,9 +9,10 @@ import pandas as pd
 import os
 from datetime import date, datetime, timedelta
 import random
+import requests
+import json
 
 from modules.database import get_transfers_sheet_url, set_transfers_sheet_url
-from modules.drive_apps_script import append_to_google_sheet_apps_script
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 TRANSFERS_FILE = os.path.join(DATA_DIR, "transfers.xlsx")
@@ -38,6 +39,44 @@ def _fetch_sheet(sheet_url: str) -> pd.DataFrame:
         return df
     except Exception as e:
         return pd.DataFrame()
+
+
+def _append_to_google_sheet(row_data: dict, sheet_url: str):
+    """
+    Append a row to Google Sheet using Google Apps Script Web App.
+    """
+    try:
+        # Get the Apps Script URL from secrets
+        apps_script_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
+        
+        if not apps_script_url:
+            return False, "❌ Google Apps Script not configured. Please add web_app_url to secrets.toml"
+        
+        # Prepare payload
+        payload = {
+            'action': 'append',
+            'sheet_url': sheet_url,
+            'data': row_data
+        }
+        
+        # Send to Apps Script
+        response = requests.post(apps_script_url, json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                return True, result.get('message', '✅ Added to Google Sheet!')
+            else:
+                return False, result.get('message', 'Unknown error')
+        else:
+            return False, f"❌ HTTP Error: {response.status_code}"
+            
+    except requests.exceptions.Timeout:
+        return False, "❌ Connection timeout. Please try again."
+    except requests.exceptions.ConnectionError:
+        return False, "❌ Connection error. Please check your internet."
+    except Exception as e:
+        return False, f"❌ Error: {str(e)}"
 
 
 def _ensure_sample_transfers():
@@ -163,7 +202,7 @@ def render_transfers_tab(user: dict):
                 2. Paste the link below → click <b>Save</b><br>
                 3. This will apply to <b>ALL</b> users.
                 <br><br>
-                <span style="color:#06D6A0;">✅ Using Google Apps Script for writing data (No GCP needed)</span>
+                <span style="color:#06D6A0;">✅ Data will be written directly to this Google Sheet.</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -208,7 +247,7 @@ def render_transfers_tab(user: dict):
                     margin-bottom:0.75rem;">
             Fill in the details below to add a new transfer. 
             <span style="color:#4F6BFF;">Your name will be auto-filled as the Agent.</span>
-            <br><span style="color:#06D6A0;">📌 Data will be saved directly to Google Sheet.</span>
+            <br><span style="color:#06D6A0;">📌 Data will be saved directly to the connected Google Sheet.</span>
         </div>
         """, unsafe_allow_html=True)
         
@@ -267,26 +306,8 @@ def render_transfers_tab(user: dict):
                         "File": "",
                     }
                     
-                    # ✅ Use Apps Script to append to Google Sheets
                     with st.spinner("Saving to Google Sheet..."):
-                        # Check if Apps Script URL is configured
-                        apps_script_url = st.secrets.get("drive_apps_script", {}).get("web_app_url", None)
-                        
-                        if apps_script_url:
-                            success, msg = append_to_google_sheet_apps_script(row_data, apps_script_url)
-                        else:
-                            # Fallback: save to local Excel
-                            try:
-                                df = pd.read_excel(TRANSFERS_FILE)
-                                new_row = pd.DataFrame([row_data])
-                                df = pd.concat([df, new_row], ignore_index=True)
-                                df.to_excel(TRANSFERS_FILE, index=False)
-                                success = True
-                                msg = "✅ Transfer added to local Excel! (Apps Script not configured)"
-                            except Exception as e:
-                                success = False
-                                msg = f"❌ Error: {e}"
-                        
+                        success, msg = _append_to_google_sheet(row_data, sheet_url)
                         if success:
                             st.success(msg)
                             st.balloons()
